@@ -109,10 +109,10 @@ struct BabyCareWidgetEntryView: View {
 struct BabyCareWidgets: WidgetBundle {
     var body: some Widget {
         BabyCareComplication()
-        BabyCareSmartStack()
     }
 }
 
+/// One accessory widget for face complications and Smart Stack (overlapping families merged).
 struct BabyCareComplication: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "BabyCareComplication", provider: BabyCareProvider()) { entry in
@@ -126,7 +126,7 @@ struct BabyCareComplication: Widget {
                 )
         }
         .configurationDisplayName("Baby Care")
-        .description("Open nap, next feed, or overdue.")
+        .description("Open nap, next feed, overdue, or last care — face and Smart Stack.")
         .supportedFamilies([
             .accessoryCircular,
             .accessoryCorner,
@@ -135,26 +135,3 @@ struct BabyCareComplication: Widget {
         ])
     }
 }
-
-struct BabyCareSmartStack: Widget {
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "BabyCareSmartStack", provider: BabyCareProvider()) { entry in
-            BabyCareWidgetEntryView(entry: entry)
-                .widgetURL(
-                    BabyHomeDeepLink.url(
-                        page: BabyCarePrimarySignal.deepLinkPage(
-                            for: BabyCarePrimarySignal.resolve(entry.snapshot)
-                        )
-                    )
-                )
-        }
-        .configurationDisplayName("Baby Care Status")
-        .description("Next due and last care status for Smart Stack.")
-        // watchOS Smart Stack uses accessory families (systemSmall/Medium are iOS-only).
-        .supportedFamilies([
-            .accessoryCircular,
-            .accessoryRectangular,
-        ])
-    }
-}
-

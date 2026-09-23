@@ -2,15 +2,24 @@ import SwiftUI
 
 struct FeedPage: View {
     @Bindable var model: BabyHomeStatusModel
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var ticksEnabled: Bool {
+        CareTimerTicks.shouldTick(
+            running: true,
+            pageSelected: model.selectedPage == .feed,
+            sceneActive: scenePhase == .active
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             CareSectionHeader(lead: "Feed", detail: model.snapshot.feedHeaderDetail)
             HStack(spacing: 8) {
-                TimedCareChip(side: .breastLeft, phase: model.breastLeft) {
+                TimedCareChip(side: .breastLeft, phase: model.breastLeft, ticksEnabled: ticksEnabled) {
                     model.toggleTimed(.breastLeft)
                 }
-                TimedCareChip(side: .breastRight, phase: model.breastRight) {
+                TimedCareChip(side: .breastRight, phase: model.breastRight, ticksEnabled: ticksEnabled) {
                     model.toggleTimed(.breastRight)
                 }
             }
@@ -49,11 +58,20 @@ struct BottlePage: View {
 
 struct SleepPage: View {
     @Bindable var model: BabyHomeStatusModel
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var ticksEnabled: Bool {
+        CareTimerTicks.shouldTick(
+            running: true,
+            pageSelected: model.selectedPage == .sleep,
+            sceneActive: scenePhase == .active
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             CareSectionHeader(lead: "Sleep", detail: nil)
-            TimedCareChip(side: .nap, phase: model.nap) {
+            TimedCareChip(side: .nap, phase: model.nap, ticksEnabled: ticksEnabled) {
                 model.toggleTimed(.nap)
             }
             CareFooterSlot(content: model.footer(tip: model.snapshot.sleepTip))
@@ -82,20 +100,29 @@ struct DiaperPage: View {
 
 struct PumpPage: View {
     @Bindable var model: BabyHomeStatusModel
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var ticksEnabled: Bool {
+        CareTimerTicks.shouldTick(
+            running: true,
+            pageSelected: model.selectedPage == .pump,
+            sceneActive: scenePhase == .active
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             CareSectionHeader(lead: "Pump", detail: model.snapshot.pumpTip)
             VStack(spacing: 6) {
                 HStack(spacing: 6) {
-                    TimedCareChip(side: .pumpLeft, phase: model.pumpLeft) {
+                    TimedCareChip(side: .pumpLeft, phase: model.pumpLeft, ticksEnabled: ticksEnabled) {
                         model.toggleTimed(.pumpLeft)
                     }
-                    TimedCareChip(side: .pumpRight, phase: model.pumpRight) {
+                    TimedCareChip(side: .pumpRight, phase: model.pumpRight, ticksEnabled: ticksEnabled) {
                         model.toggleTimed(.pumpRight)
                     }
                 }
-                TimedCareChip(side: .pumpBoth, phase: model.pumpBoth) {
+                TimedCareChip(side: .pumpBoth, phase: model.pumpBoth, ticksEnabled: ticksEnabled) {
                     model.toggleTimed(.pumpBoth)
                 }
             }

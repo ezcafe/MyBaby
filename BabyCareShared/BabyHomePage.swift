@@ -11,6 +11,11 @@ enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
 
     var id: Int { rawValue }
 
+    /// Keep selected page and ±1 neighbor mounted; unload the rest to cut TabView RSS.
+    static func shouldMount(_ page: BabyHomePage, selected: BabyHomePage) -> Bool {
+        abs(page.rawValue - selected.rawValue) <= 1
+    }
+
     var queryValue: String {
         switch self {
         case .feed: return "feed"

@@ -71,6 +71,8 @@ struct TimedCareChip: View {
     @Environment(\.colorScheme) private var scheme
     let side: TimedChipSide
     let phase: TimedChipPhase
+    /// When false, running chips show a static elapsed label (no 1 Hz TimelineView).
+    var ticksEnabled: Bool = true
     let action: () -> Void
 
     /// Pump L/R/Both match amount-chip height; Feed/Sleep keep roomier chrome.
@@ -81,11 +83,18 @@ struct TimedCareChip: View {
         }
     }
 
+    private var useTimeline: Bool {
+        if case .running = phase {
+            return ticksEnabled
+        }
+        return false
+    }
+
     var body: some View {
         let p = BabyPalette(scheme: scheme)
         Button(action: action) {
             // Scope timer ticks to the chip label only — never rebuild TabView.
-            if case .running = phase {
+            if useTimeline {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     chipLabel(now: context.date, palette: p)
                 }

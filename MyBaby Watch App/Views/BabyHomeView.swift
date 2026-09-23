@@ -6,26 +6,52 @@ struct BabyHomeView: View {
 
     var body: some View {
         let p = BabyPalette(scheme: scheme)
+        let selected = model.selectedPage
         // Do not wrap TabView in TimelineView — 1s rebuilds cancel in-flight gestures.
         // No navigationTitle — Gate A2 removed app title chrome.
+        // Mount only selected ±1 neighbor so far pages do not stay resident.
         TabView(selection: $model.selectedPage) {
-            FeedPage(model: model)
-                .tag(BabyHomePage.feed)
-            BottlePage(model: model)
-                .tag(BabyHomePage.bottle)
-            SleepPage(model: model)
-                .tag(BabyHomePage.sleep)
-            DiaperPage(model: model)
-                .tag(BabyHomePage.diaper)
-            PumpPage(model: model)
-                .tag(BabyHomePage.pump)
-            PumpAmountPage(model: model)
-                .tag(BabyHomePage.pumpAmount)
-            LastCarePage(model: model)
-                .tag(BabyHomePage.lastCare)
+            pageSlot(.feed, selected: selected) {
+                FeedPage(model: model)
+            }
+            pageSlot(.bottle, selected: selected) {
+                BottlePage(model: model)
+            }
+            pageSlot(.sleep, selected: selected) {
+                SleepPage(model: model)
+            }
+            pageSlot(.diaper, selected: selected) {
+                DiaperPage(model: model)
+            }
+            pageSlot(.pump, selected: selected) {
+                PumpPage(model: model)
+            }
+            pageSlot(.pumpAmount, selected: selected) {
+                PumpAmountPage(model: model)
+            }
+            pageSlot(.lastCare, selected: selected) {
+                LastCarePage(model: model)
+            }
         }
         .tabViewStyle(.page)
         .background(p.background)
+    }
+
+    @ViewBuilder
+    private func pageSlot<Content: View>(
+        _ page: BabyHomePage,
+        selected: BabyHomePage,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        Group {
+            if BabyHomePage.shouldMount(page, selected: selected) {
+                content()
+            } else {
+                Color.clear
+                    .accessibilityHidden(true)
+            }
+        }
+        .tag(page)
     }
 }
 

@@ -8,9 +8,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if bypassAuth || model.isConnected {
-                NavigationStack {
-                    BabyHomeView(model: model)
-                }
+                BabyHomeView(model: model)
             } else {
                 AuthStubView(model: model)
             }

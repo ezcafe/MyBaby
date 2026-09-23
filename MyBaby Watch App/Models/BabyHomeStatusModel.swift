@@ -85,6 +85,9 @@ final class BabyHomeStatusModel {
     var pendingRecovery: String?
     var statusFail: String?
 
+    /// Latest done-flash clear work — cancelled when a newer flash schedules.
+    private(set) var clearDoneTask: Task<Void, Never>?
+
     init(snapshot: BabyHomeStatusSnapshot = .sampleNextFeed()) {
         self.snapshot = snapshot
         if let start = snapshot.openNapStartedAt {
@@ -242,20 +245,21 @@ final class BabyHomeStatusModel {
     }
 
     private func scheduleClearDoneForSide() {
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
-            if case .done = breastLeft { breastLeft = .idle }
-            if case .done = breastRight { breastRight = .idle }
-            if case .done = nap { nap = .idle }
-            if case .done = pumpLeft { pumpLeft = .idle }
-            if case .done = pumpRight { pumpRight = .idle }
-            if case .done = pumpBoth { pumpBoth = .idle }
+        scheduleClearDone {
+            if case .done = self.breastLeft { self.breastLeft = .idle }
+            if case .done = self.breastRight { self.breastRight = .idle }
+            if case .done = self.nap { self.nap = .idle }
+            if case .done = self.pumpLeft { self.pumpLeft = .idle }
+            if case .done = self.pumpRight { self.pumpRight = .idle }
+            if case .done = self.pumpBoth { self.pumpBoth = .idle }
         }
     }
 
     private func scheduleClearDone(_ clear: @escaping @MainActor () -> Void) {
-        Task { @MainActor in
+        clearDoneTask?.cancel()
+        clearDoneTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
             clear()
         }
     }

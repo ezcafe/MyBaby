@@ -24,12 +24,10 @@ Deep links: `mybaby://home?page=feed|bottle|sleep|diaper|pump|pump-amount|status
 
 1. Build & run **MyBaby Watch App** on a watchOS 10+ simulator or device (embeds **MyBaby Watch Widgets**).
 2. **Face complications:** long-press face → Edit → pick a slot → choose **Baby Care** (circular / corner / rectangular / inline).
-3. **Smart Stack:** turn Digital Crown to Smart Stack → Edit → add **Baby Care** (small or medium).
+3. **Smart Stack:** turn Digital Crown to Smart Stack → Edit → add **Baby Care** (accessory circular / rectangular).
 4. Tap a companion to open the matching home page.
 
-Companions show one primary signal: open nap → overdue → next feed → last care. Logging stays in the app.
-
-On watchOS, Smart Stack / face slots use **accessory** families (circular, corner, rectangular, inline). iOS `systemSmall` / `systemMedium` are not available on Watch.
+Companions share one **Baby Care** widget kind for face and Smart Stack. They show one primary signal: open nap → overdue → next feed → last care. Logging stays in the app.
 
 ## Project layout
 

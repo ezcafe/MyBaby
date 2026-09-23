@@ -116,6 +116,19 @@ struct BabyHomeStatusTests {
         #expect(BabyHomePage.lastCare.queryValue == "status")
     }
 
+    @Test func pageMountKeepsSelectedAndNeighborsOnly() {
+        #expect(BabyHomePage.shouldMount(.feed, selected: .feed))
+        #expect(BabyHomePage.shouldMount(.bottle, selected: .feed))
+        #expect(!BabyHomePage.shouldMount(.sleep, selected: .feed))
+        #expect(BabyHomePage.shouldMount(.sleep, selected: .diaper))
+        #expect(BabyHomePage.shouldMount(.diaper, selected: .diaper))
+        #expect(BabyHomePage.shouldMount(.pump, selected: .diaper))
+        #expect(!BabyHomePage.shouldMount(.feed, selected: .diaper))
+        #expect(!BabyHomePage.shouldMount(.lastCare, selected: .diaper))
+        #expect(BabyHomePage.shouldMount(.pumpAmount, selected: .lastCare))
+        #expect(!BabyHomePage.shouldMount(.pump, selected: .lastCare))
+    }
+
     @Test func deepLinkPumpAmountMaps() {
         let url = URL(string: "mybaby://home?page=pump-amount")!
         #expect(BabyHomeDeepLink.page(from: url) == .pumpAmount)
@@ -385,5 +398,43 @@ struct BabyHomeStatusTests {
         #expect(TimedChipSide.pumpRight.title == "Right")
         #expect(TimedChipSide.pumpLeft.runningTitle == "Left")
         #expect(TimedChipSide.pumpRight.runningTitle == "Right")
+    }
+
+    // MARK: - Memory hygiene (cancel + tick gate)
+
+    @Test func careTimerTicksOnlyWhenRunningSelectedAndActive() {
+        #expect(CareTimerTicks.shouldTick(running: true, pageSelected: true, sceneActive: true))
+        #expect(!CareTimerTicks.shouldTick(running: false, pageSelected: true, sceneActive: true))
+        #expect(!CareTimerTicks.shouldTick(running: true, pageSelected: false, sceneActive: true))
+        #expect(!CareTimerTicks.shouldTick(running: true, pageSelected: true, sceneActive: false))
+    }
+
+    @Test @MainActor func modelSecondDoneFlashCancelsPriorClearTask() {
+        let model = BabyHomeStatusModel()
+        model.toggleTimed(.breastLeft)
+        model.toggleTimed(.breastLeft)
+        #expect(model.breastLeft == .done)
+        let first = model.clearDoneTask
+        #expect(first != nil)
+
+        model.toggleTimed(.breastRight)
+        model.toggleTimed(.breastRight)
+        #expect(model.breastRight == .done)
+        #expect(first?.isCancelled == true)
+        #expect(model.clearDoneTask != nil)
+    }
+
+    @Test @MainActor func modelAmountFlashCancelsPriorSideClearTask() {
+        let model = BabyHomeStatusModel()
+        model.toggleTimed(.nap)
+        model.toggleTimed(.nap)
+        #expect(model.nap == .done)
+        let first = model.clearDoneTask
+        #expect(first != nil)
+
+        model.selectBottle(ml: 90)
+        #expect(first?.isCancelled == true)
+        #expect(model.clearDoneTask != nil)
+        #expect(model.bottleDoneMl == 90)
     }
 }
