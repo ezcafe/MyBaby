@@ -5,12 +5,32 @@ enum TimedChipSide: String, CaseIterable, Identifiable {
     case breastLeft = "Left"
     case breastRight = "Right"
     case nap = "Start nap"
-    case pumpLeft = "Pump L"
-    case pumpRight = "Pump R"
+    /// Unique raw ids — display title is `title` (“Left” / “Right”).
+    case pumpLeft = "pumpLeft"
+    case pumpRight = "pumpRight"
+    case pumpBoth = "Both"
 
     var id: String { rawValue }
 
+    /// Idle / running chip label.
+    var title: String {
+        switch self {
+        case .breastLeft, .pumpLeft: return "Left"
+        case .breastRight, .pumpRight: return "Right"
+        case .nap: return "Start nap"
+        case .pumpBoth: return "Both"
+        }
+    }
+
     var idleSubtitle: String { "Tap to start" }
+
+    /// Title while the chip is running (no “Tap to stop”).
+    var runningTitle: String {
+        switch self {
+        case .nap: return "Nap"
+        case .breastLeft, .breastRight, .pumpLeft, .pumpRight, .pumpBoth: return title
+        }
+    }
 }
 
 enum TimedChipPhase: Equatable {
@@ -44,7 +64,7 @@ enum CareFooterResolver {
 @MainActor
 final class BabyHomeStatusModel {
     var snapshot: BabyHomeStatusSnapshot
-    var selectedPage: BabyHomePage = .feedBottle
+    var selectedPage: BabyHomePage = .feed
     var isConnected: Bool = true
 
     var breastLeft: TimedChipPhase = .idle
@@ -52,7 +72,9 @@ final class BabyHomeStatusModel {
     var nap: TimedChipPhase = .idle
     var pumpLeft: TimedChipPhase = .idle
     var pumpRight: TimedChipPhase = .idle
+    var pumpBoth: TimedChipPhase = .idle
 
+    /// Not used for lasting accent — flash uses done* only (my-apps parity).
     var selectedBottleMl: Int?
     var selectedPumpMl: Int?
     var selectedDiaperKind: DiaperKind?
@@ -63,8 +85,6 @@ final class BabyHomeStatusModel {
     var pendingRecovery: String?
     var statusFail: String?
 
-    var now: Date = .now
-
     init(snapshot: BabyHomeStatusSnapshot = .sampleNextFeed()) {
         self.snapshot = snapshot
         if let start = snapshot.openNapStartedAt {
@@ -73,7 +93,18 @@ final class BabyHomeStatusModel {
     }
 
     var primarySignal: BabyCarePrimaryKind {
-        BabyCarePrimarySignal.resolve(snapshot, now: now)
+        BabyCarePrimarySignal.resolve(snapshot, now: .now)
+    }
+
+    private var napOpen: Bool {
+        if case .running = nap { return true }
+        return snapshot.openNapStartedAt != nil
+    }
+
+    private var breastRunning: Bool {
+        if case .running = breastLeft { return true }
+        if case .running = breastRight { return true }
+        return false
     }
 
     func footer(tip: String) -> CareFooterContent {
@@ -86,31 +117,56 @@ final class BabyHomeStatusModel {
 
     func toggleTimed(_ side: TimedChipSide) {
         switch side {
-        case .breastLeft: breastLeft = advance(breastLeft)
-        case .breastRight: breastRight = advance(breastRight)
-        case .nap: nap = advanceNap(nap)
-        case .pumpLeft: pumpLeft = advance(pumpLeft)
-        case .pumpRight: pumpRight = advance(pumpRight)
+        case .breastLeft:
+            applySideEffects(.breast)
+            if case .idle = breastLeft, case .running = breastRight {
+                breastRight = .idle
+            }
+            breastLeft = advance(breastLeft)
+        case .breastRight:
+            applySideEffects(.breast)
+            if case .idle = breastRight, case .running = breastLeft {
+                breastLeft = .idle
+            }
+            breastRight = advance(breastRight)
+        case .nap:
+            applySideEffects(.sleep)
+            nap = advanceNap(nap)
+        case .pumpLeft:
+            applySideEffects(.pumpTimer)
+            clearOtherPumpSides(except: .pumpLeft)
+            pumpLeft = advance(pumpLeft)
+        case .pumpRight:
+            applySideEffects(.pumpTimer)
+            clearOtherPumpSides(except: .pumpRight)
+            pumpRight = advance(pumpRight)
+        case .pumpBoth:
+            applySideEffects(.pumpTimer)
+            clearOtherPumpSides(except: .pumpBoth)
+            pumpBoth = advance(pumpBoth)
         }
         BabyHaptics.timerChanged()
     }
 
     func selectBottle(ml: Int) {
-        selectedBottleMl = ml
+        applySideEffects(.bottle)
+        selectedBottleMl = nil
         bottleDoneMl = ml
         BabyHaptics.save()
         scheduleClearDone { self.bottleDoneMl = nil }
     }
 
     func selectPump(ml: Int) {
-        selectedPumpMl = ml
+        applySideEffects(.pumpAmount)
+        selectedPumpMl = nil
         pumpDoneMl = ml
         BabyHaptics.save()
         scheduleClearDone { self.pumpDoneMl = nil }
     }
 
     func selectDiaper(_ kind: DiaperKind) {
-        selectedDiaperKind = kind
+        applySideEffects(.diaper)
+        selectedDiaperKind = nil
         diaperDoneKind = kind
         BabyHaptics.save()
         scheduleClearDone { self.diaperDoneKind = nil }
@@ -120,10 +176,48 @@ final class BabyHomeStatusModel {
         selectedPage = BabyHomeDeepLink.page(from: url)
     }
 
+    private func clearOtherPumpSides(except keep: TimedChipSide) {
+        if keep != .pumpLeft, case .running = pumpLeft { pumpLeft = .idle }
+        if keep != .pumpRight, case .running = pumpRight { pumpRight = .idle }
+        if keep != .pumpBoth, case .running = pumpBoth { pumpBoth = .idle }
+    }
+
+    private func applySideEffects(_ action: CareQuickAction) {
+        let flags = CareSideEffects.flags(
+            for: action,
+            napOpen: napOpen,
+            breastRunning: breastRunning
+        )
+        if flags.endOpenNap {
+            endOpenNapNow()
+        }
+        if flags.stopBreast {
+            stopBreastNow()
+        }
+    }
+
+    /// Related-stop from another action: hide active UI (idle), no Done flash.
+    private func endOpenNapNow() {
+        snapshot.openNapStartedAt = nil
+        if case .running = nap {
+            nap = .idle
+        }
+    }
+
+    /// Related-stop from another action: hide active UI (idle), no Done flash.
+    private func stopBreastNow() {
+        if case .running = breastLeft {
+            breastLeft = .idle
+        }
+        if case .running = breastRight {
+            breastRight = .idle
+        }
+    }
+
     private func advance(_ phase: TimedChipPhase) -> TimedChipPhase {
         switch phase {
         case .idle:
-            return .running(startedAt: now)
+            return .running(startedAt: .now)
         case .running:
             scheduleClearDoneForSide()
             return .done
@@ -135,8 +229,9 @@ final class BabyHomeStatusModel {
     private func advanceNap(_ phase: TimedChipPhase) -> TimedChipPhase {
         switch phase {
         case .idle:
-            snapshot.openNapStartedAt = now
-            return .running(startedAt: now)
+            let started = Date.now
+            snapshot.openNapStartedAt = started
+            return .running(startedAt: started)
         case .running:
             snapshot.openNapStartedAt = nil
             scheduleClearDoneForSide()
@@ -154,6 +249,7 @@ final class BabyHomeStatusModel {
             if case .done = nap { nap = .idle }
             if case .done = pumpLeft { pumpLeft = .idle }
             if case .done = pumpRight { pumpRight = .idle }
+            if case .done = pumpBoth { pumpBoth = .idle }
         }
     }
 

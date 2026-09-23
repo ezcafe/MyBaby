@@ -89,7 +89,7 @@ struct BabyCareWidgetEntryView: View {
     private func icon(_ signal: BabyCarePrimaryKind) -> String {
         switch signal {
         case .openNap: return "moon.zzz.fill"
-        case .overdueFeed, .nextFeed: return "bottle.fill"
+        case .overdueFeed, .nextFeed: return "waterbottle.fill"
         case .overdueDiaper: return "toilet.fill"
         case .lastCare: return "heart.fill"
         }

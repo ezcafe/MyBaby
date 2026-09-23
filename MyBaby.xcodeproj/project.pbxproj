@@ -7,18 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A1B2C3D43062B3010083F015 /* MyBaby Watch Widgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1B2C3D43062B3010083F003 /* MyBaby Watch Widgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4FD62DC63062B2F80083F635 /* MyBaby Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 4FD62DC53062B2F80083F635 /* MyBaby Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A1B2C3D43062B3010083F015 /* MyBaby Watch Widgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1B2C3D43062B3010083F003 /* MyBaby Watch Widgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		A1B2C3D43062B3010083F016 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 4FD62DB93062B2F80083F635 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = A1B2C3D43062B3010083F010;
-			remoteInfo = "MyBaby Watch Widgets";
-		};
 		4FD62DC73062B2F80083F635 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 4FD62DB93062B2F80083F635 /* Project object */;
@@ -40,19 +33,16 @@
 			remoteGlobalIDString = 4FD62DC43062B2F80083F635;
 			remoteInfo = "MyBaby Watch App";
 		};
+		A1B2C3D43062B3010083F016 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4FD62DB93062B2F80083F635 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1B2C3D43062B3010083F010;
+			remoteInfo = "MyBaby Watch Widgets";
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		A1B2C3D43062B3010083F014 /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				A1B2C3D43062B3010083F015 /* MyBaby Watch Widgets.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		4FD62DE93062B2FB0083F635 /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
@@ -62,27 +52,26 @@
 			);
 			name = "Embed Watch Content";
 		};
+		A1B2C3D43062B3010083F014 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				A1B2C3D43062B3010083F015 /* MyBaby Watch Widgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A1B2C3D43062B3010083F003 /* MyBaby Watch Widgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "MyBaby Watch Widgets.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FD62DBF3062B2F80083F635 /* MyBaby.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyBaby.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FD62DC53062B2F80083F635 /* MyBaby Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "MyBaby Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FD62DD43062B2FB0083F635 /* MyBaby Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "MyBaby Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FD62DDE3062B2FB0083F635 /* MyBaby Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "MyBaby Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D43062B3010083F003 /* MyBaby Watch Widgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "MyBaby Watch Widgets.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A1B2C3D43062B3010083F001 /* BabyCareShared */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = BabyCareShared;
-			sourceTree = "<group>";
-		};
-		A1B2C3D43062B3010083F002 /* MyBaby Watch Widgets */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "MyBaby Watch Widgets";
-			sourceTree = "<group>";
-		};
 		4FD62DC93062B2F80083F635 /* MyBaby Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "MyBaby Watch App";
@@ -98,14 +87,19 @@
 			path = "MyBaby Watch AppUITests";
 			sourceTree = "<group>";
 		};
+		A1B2C3D43062B3010083F001 /* BabyCareShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BabyCareShared;
+			sourceTree = "<group>";
+		};
+		A1B2C3D43062B3010083F002 /* MyBaby Watch Widgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "MyBaby Watch Widgets";
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A1B2C3D43062B3010083F012 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			files = (
-			);
-		};
 		4FD62DC23062B2F80083F635 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
@@ -117,6 +111,11 @@
 			);
 		};
 		4FD62DDB3062B2FB0083F635 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		A1B2C3D43062B3010083F012 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -243,11 +242,9 @@
 			);
 			buildRules = (
 			);
-			dependencies = (
-			);
 			fileSystemSynchronizedGroups = (
-				A1B2C3D43062B3010083F002 /* MyBaby Watch Widgets */,
 				A1B2C3D43062B3010083F001 /* BabyCareShared */,
+				A1B2C3D43062B3010083F002 /* MyBaby Watch Widgets */,
 			);
 			name = "MyBaby Watch Widgets";
 			productName = "MyBaby Watch Widgets";
@@ -307,11 +304,6 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A1B2C3D43062B3010083F013 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			files = (
-			);
-		};
 		4FD62DBD3062B2F80083F635 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
@@ -332,14 +324,14 @@
 			files = (
 			);
 		};
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXSourcesBuildPhase section */
-		A1B2C3D43062B3010083F011 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
+		A1B2C3D43062B3010083F013 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
 			files = (
 			);
 		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
 		4FD62DC13062B2F80083F635 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -355,14 +347,14 @@
 			files = (
 			);
 		};
+		A1B2C3D43062B3010083F011 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		A1B2C3D43062B3010083F017 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = A1B2C3D43062B3010083F010 /* MyBaby Watch Widgets */;
-			targetProxy = A1B2C3D43062B3010083F016 /* PBXContainerItemProxy */;
-		};
 		4FD62DC83062B2F80083F635 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 4FD62DC43062B2F80083F635 /* MyBaby Watch App */;
@@ -377,6 +369,11 @@
 			isa = PBXTargetDependency;
 			target = 4FD62DC43062B2F80083F635 /* MyBaby Watch App */;
 			targetProxy = 4FD62DDF3062B2FB0083F635 /* PBXContainerItemProxy */;
+		};
+		A1B2C3D43062B3010083F017 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1B2C3D43062B3010083F010 /* MyBaby Watch Widgets */;
+			targetProxy = A1B2C3D43062B3010083F016 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -685,8 +682,7 @@
 			};
 			name = Release;
 		};
-
-		A1B2C3D43062B3010083F020 /* Debug */ = {
+		A1B2C3D43062B3010083F020 /* Debug configuration for PBXNativeTarget "MyBaby Watch Widgets" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
@@ -715,7 +711,7 @@
 			};
 			name = Debug;
 		};
-		A1B2C3D43062B3010083F021 /* Release */ = {
+		A1B2C3D43062B3010083F021 /* Release configuration for PBXNativeTarget "MyBaby Watch Widgets" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
@@ -748,15 +744,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A1B2C3D43062B3010083F022 /* Build configuration list for PBXNativeTarget "MyBaby Watch Widgets" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				A1B2C3D43062B3010083F020 /* Debug */,
-				A1B2C3D43062B3010083F021 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		4FD62DBC3062B2F80083F635 /* Build configuration list for PBXProject "MyBaby" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -794,6 +781,14 @@
 			buildConfigurations = (
 				4FD62DF13062B2FB0083F635 /* Debug configuration for PBXNativeTarget "MyBaby Watch AppUITests" */,
 				4FD62DF23062B2FB0083F635 /* Release configuration for PBXNativeTarget "MyBaby Watch AppUITests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D43062B3010083F022 /* Build configuration list for PBXNativeTarget "MyBaby Watch Widgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D43062B3010083F020 /* Debug configuration for PBXNativeTarget "MyBaby Watch Widgets" */,
+				A1B2C3D43062B3010083F021 /* Release configuration for PBXNativeTarget "MyBaby Watch Widgets" */,
 			);
 			defaultConfigurationName = Release;
 		};

@@ -6,26 +6,26 @@ struct BabyHomeView: View {
 
     var body: some View {
         let p = BabyPalette(scheme: scheme)
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            TabView(selection: $model.selectedPage) {
-                FeedBottlePage(model: model)
-                    .tag(BabyHomePage.feedBottle)
-                SleepPage(model: model)
-                    .tag(BabyHomePage.sleep)
-                DiaperPage(model: model)
-                    .tag(BabyHomePage.diaper)
-                PumpPage(model: model)
-                    .tag(BabyHomePage.pump)
-                LastCarePage(model: model)
-                    .tag(BabyHomePage.lastCare)
-            }
-            .tabViewStyle(.page)
-            .navigationTitle(model.snapshot.title)
-            .background(p.background)
-            .onChange(of: context.date) { _, newDate in
-                model.now = newDate
-            }
+        // Do not wrap TabView in TimelineView — 1s rebuilds cancel in-flight gestures.
+        // No navigationTitle — Gate A2 removed app title chrome.
+        TabView(selection: $model.selectedPage) {
+            FeedPage(model: model)
+                .tag(BabyHomePage.feed)
+            BottlePage(model: model)
+                .tag(BabyHomePage.bottle)
+            SleepPage(model: model)
+                .tag(BabyHomePage.sleep)
+            DiaperPage(model: model)
+                .tag(BabyHomePage.diaper)
+            PumpPage(model: model)
+                .tag(BabyHomePage.pump)
+            PumpAmountPage(model: model)
+                .tag(BabyHomePage.pumpAmount)
+            LastCarePage(model: model)
+                .tag(BabyHomePage.lastCare)
         }
+        .tabViewStyle(.page)
+        .background(p.background)
     }
 }
 

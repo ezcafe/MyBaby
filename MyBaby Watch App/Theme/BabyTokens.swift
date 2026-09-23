@@ -33,6 +33,11 @@ enum BabyTokens {
     static let outerRadius: CGFloat = 8
     static let nestedRadius: CGFloat = 6
     static let minHit: CGFloat = 44
+    /// Shared row height for ml chips, Custom, and Diaper tiles.
+    static let careChipHeight: CGFloat = minHit
+
+    /// Tips, section detail, idle “Tap to start” — quieter than caption2.
+    static let secondaryFont: Font = .system(size: 11, weight: .regular)
 }
 
 struct BabyPalette {

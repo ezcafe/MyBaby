@@ -1,20 +1,24 @@
 import Foundation
 
 enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
-    case feedBottle = 0
+    case feed = 0
+    case bottle
     case sleep
     case diaper
     case pump
+    case pumpAmount
     case lastCare
 
     var id: Int { rawValue }
 
     var queryValue: String {
         switch self {
-        case .feedBottle: return "feed"
+        case .feed: return "feed"
+        case .bottle: return "bottle"
         case .sleep: return "sleep"
         case .diaper: return "diaper"
         case .pump: return "pump"
+        case .pumpAmount: return "pump-amount"
         case .lastCare: return "status"
         }
     }
@@ -22,10 +26,12 @@ enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
     static func fromQuery(_ value: String?) -> BabyHomePage? {
         guard let value else { return nil }
         switch value.lowercased() {
-        case "feed", "bottle", "breast": return .feedBottle
+        case "feed", "breast": return .feed
+        case "bottle": return .bottle
         case "sleep", "nap": return .sleep
         case "diaper": return .diaper
         case "pump": return .pump
+        case "pump-amount", "pumpamount", "pump_amount": return .pumpAmount
         case "status", "lastcare", "last-care": return .lastCare
         default: return nil
         }
@@ -36,14 +42,14 @@ enum BabyHomeDeepLink {
     static let scheme = "mybaby"
     static let host = "home"
 
-    /// Maps `mybaby://home?page=sleep` → page. Unknown → `.feedBottle`.
+    /// Maps `mybaby://home?page=sleep` → page. Unknown → `.feed`.
     static func page(from url: URL) -> BabyHomePage {
         guard url.scheme == scheme, url.host == host else {
-            return .feedBottle
+            return .feed
         }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
         let page = items?.first(where: { $0.name == "page" })?.value
-        return BabyHomePage.fromQuery(page) ?? .feedBottle
+        return BabyHomePage.fromQuery(page) ?? .feed
     }
 
     static func url(page: BabyHomePage) -> URL {

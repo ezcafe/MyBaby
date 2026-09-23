@@ -6,15 +6,19 @@ UI-first watchOS 10+ companion for one-thumb care logging. Status uses **sample 
 
 | Web home section | Watch page (swipe order) |
 |------------------|--------------------------|
-| Breast + Bottle | **1 · Feed + Bottle** (stacked) |
-| Nap | **2 · Sleep** |
-| Diaper | **3 · Diaper** |
-| Pump | **4 · Pump** |
-| Last care status | **5 · Last care** |
+| Breast | **1 · Feed** |
+| Bottle | **2 · Bottle** (3 recommended ml + big Custom) |
+| Nap | **3 · Sleep** |
+| Diaper | **4 · Diaper** |
+| Pump timers | **5 · Pump** (L / R / Both) |
+| Pump amount | **6 · Pump amount** (3 recommended ml + big Custom) |
+| Last care status | **7 · Last care** |
 
-Each care page keeps web chrome: **header** (when next) → **controls** (chips) → **one footer** (recovery → fail → tip).
+No app title chrome. Each care page: **header** (lead + quieter detail) → **controls** → **one footer** (recovery → fail → tip).
 
-Deep links: `mybaby://home?page=feed|sleep|diaper|pump|status`
+Care taps follow web quick-care local rules: Feed / Bottle / Diaper end an open nap; Pump family does not. Sleep chip owns start/stop. Log chips use a short done flash only.
+
+Deep links: `mybaby://home?page=feed|bottle|sleep|diaper|pump|pump-amount|status`
 
 ## Add companions to the Watch face / Smart Stack
 
@@ -30,7 +34,7 @@ On watchOS, Smart Stack / face slots use **accessory** families (circular, corne
 ## Project layout
 
 - `MyBaby Watch App/` — `BabyHomeView`, chips, auth stub
-- `BabyCareShared/` — snapshot, primary signal, deep link, timeline helper (app + widgets)
+- `BabyCareShared/` — snapshot, primary signal, deep link, care side effects, chip mls, timeline helper
 - `MyBaby Watch Widgets/` — complications + Smart Stack widgets
 
 ## Auth

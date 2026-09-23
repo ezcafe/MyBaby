@@ -8,6 +8,8 @@ struct BabyCareStatusLine: Equatable, Sendable {
 
 struct BabyHomeStatusSnapshot: Equatable, Sendable {
     var title: String
+    /// Calendar age in days — drives Last care header (“Last care · 4 months”).
+    var ageDays: Int
     var feedHeaderDetail: String?
     var feedTip: String
     var bottleTip: String
@@ -23,52 +25,75 @@ struct BabyHomeStatusSnapshot: Equatable, Sendable {
     var lastNap: BabyCareStatusLine
     var lastDiaper: BabyCareStatusLine
     var lastPump: BabyCareStatusLine
+    /// Distinct recent formula ml for chip builder (web `recentBottleMl`).
+    var recentBottleMl: [Int]
 
-    static let defaultBottleChips = [60, 90, 120]
+    /// Last care page lead, e.g. “Last care · 4 months”.
+    var lastCareHeaderLead: String {
+        Self.lastCareLead(ageDays: ageDays)
+    }
 
+    /// Unused in chrome after Gate A2 (title removed); kept for samples / future.
     static func ageTitle(ageDays: Int) -> String {
+        "Baby Care · \(agePhrase(ageDays: ageDays))"
+    }
+
+    static func agePhrase(ageDays: Int) -> String {
         if ageDays < 30 {
             let n = max(ageDays, 0)
-            return "Baby Care · \(n) \(n == 1 ? "day" : "days")"
+            return "\(n) \(n == 1 ? "day" : "days")"
         }
         let months = ageDays / 30
-        return "Baby Care · \(months) \(months == 1 ? "month" : "months")"
+        return "\(months) \(months == 1 ? "month" : "months")"
+    }
+
+    static func lastCareLead(ageDays: Int) -> String {
+        "Last care · \(agePhrase(ageDays: ageDays))"
     }
 
     static func sampleNextFeed(now: Date = .now) -> BabyHomeStatusSnapshot {
-        BabyHomeStatusSnapshot(
+        let recent: [Int] = []
+        let chips = BabyBottleChipMls.build(
+            recentBottleMl: recent,
+            snaps: BabyBottleChipMls.noBirthSnaps,
+            limit: 3
+        )
+        return BabyHomeStatusSnapshot(
             title: ageTitle(ageDays: 120),
+            ageDays: 120,
             feedHeaderDetail: "Next feed is in about 12min.",
             feedTip: "About 6–8 feeds a day.",
             bottleTip: "Pick an amount below.",
-            bottleChipMls: defaultBottleChips,
+            bottleChipMls: chips,
             sleepTip: "Tap to start or end a nap.",
             diaperTip: "Tap a kind to log a change.",
-            pumpTip: "Tap Pump L or R to start.",
+            pumpTip: "Tap Left, Right, or Both to start.",
             openNapStartedAt: nil,
             nextFeedInSeconds: 12 * 60,
             feedOverdueSeconds: nil,
             diaperOverdueSeconds: nil,
             lastFeed: .init(
-                iconSystemName: "bottle.fill",
-                sentence: "Last feed was a bottle of 120 ml, 25m ago.",
+                // `bottle.fill` often renders blank on watchOS — use waterbottle.
+                iconSystemName: "waterbottle.fill",
+                sentence: "Bottle 120 ml · 25m",
                 isEmpty: false
             ),
             lastNap: .init(
                 iconSystemName: "moon.zzz.fill",
-                sentence: "No nap logged yet.",
+                sentence: "No nap yet",
                 isEmpty: true
             ),
             lastDiaper: .init(
-                iconSystemName: "toilet.fill",
-                sentence: "Last diaper was wet, 1h ago.",
+                iconSystemName: "leaf.fill",
+                sentence: "Wet · 1h",
                 isEmpty: false
             ),
             lastPump: .init(
                 iconSystemName: "drop.fill",
-                sentence: "No pump logged yet.",
+                sentence: "No pump yet",
                 isEmpty: true
-            )
+            ),
+            recentBottleMl: recent
         )
     }
 
@@ -80,7 +105,7 @@ struct BabyHomeStatusSnapshot: Equatable, Sendable {
         s.sleepTip = "Nap is running."
         s.lastNap = .init(
             iconSystemName: "moon.zzz.fill",
-            sentence: "Baby is napping now (for 12:04).",
+            sentence: "Napping · 12:04",
             isEmpty: false
         )
         return s
@@ -119,7 +144,7 @@ enum BabyCarePrimarySignal {
     static func deepLinkPage(for kind: BabyCarePrimaryKind) -> BabyHomePage {
         switch kind {
         case .openNap: return .sleep
-        case .overdueFeed, .nextFeed: return .feedBottle
+        case .overdueFeed, .nextFeed: return .feed
         case .overdueDiaper: return .diaper
         case .lastCare: return .lastCare
         }
