@@ -6,19 +6,18 @@ UI-first watchOS 10+ companion for one-thumb care logging. Status uses **sample 
 
 | Web home section | Watch page (swipe order) |
 |------------------|--------------------------|
-| Breast | **1 · Feed** |
-| Bottle | **2 · Bottle** (3 recommended ml + big Custom) |
-| Nap | **3 · Sleep** |
-| Diaper | **4 · Diaper** |
-| Pump timers | **5 · Pump** (L / R / Both) |
-| Pump amount | **6 · Pump amount** (3 recommended ml + big Custom) |
-| Last care status | **7 · Last care** |
+| Breast + Bottle | **1 · Feed** (breast L/R + ml chips + Custom; vertical scroll) |
+| Nap | **2 · Sleep** |
+| Diaper | **3 · Diaper** |
+| Pump timers + amount | **4 · Pump** (L / R / Both + ml chips + Custom; vertical scroll) |
+| Last care status | **5 · Last care** (status rows; vertical scroll) |
 
-No app title chrome. Each care page: **header** (lead + quieter detail) → **controls** → **one footer** (recovery → fail → tip).
+No app title chrome. Each care page: **header** (lead + quieter detail) → **controls** → **one footer** (recovery → fail → tip). Feed, Pump, and Last care scroll vertically when content is tall.
 
 Care taps follow web quick-care local rules: Feed / Bottle / Diaper end an open nap; Pump family does not. Sleep chip owns start/stop. Log chips use a short done flash only.
 
-Deep links: `mybaby://home?page=feed|bottle|sleep|diaper|pump|pump-amount|status`
+Deep links: `mybaby://home?page=feed|sleep|diaper|pump|status`  
+Aliases (same pages): `breast` / `bottle` → Feed; `nap` → Sleep; `pump-amount` → Pump.
 
 ## Add companions to the Watch face / Smart Stack
 

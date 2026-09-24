@@ -3,6 +3,7 @@ import SwiftUI
 struct FeedPage: View {
     @Bindable var model: BabyHomeStatusModel
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showCustomBottle = false
 
     private var ticksEnabled: Bool {
         CareTimerTicks.shouldTick(
@@ -13,39 +14,28 @@ struct FeedPage: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            CareSectionHeader(lead: "Feed", detail: model.snapshot.feedHeaderDetail)
-            HStack(spacing: 8) {
-                TimedCareChip(side: .breastLeft, phase: model.breastLeft, ticksEnabled: ticksEnabled) {
-                    model.toggleTimed(.breastLeft)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                CareSectionHeader(lead: "Feed", detail: model.snapshot.feedHeaderDetail)
+                HStack(spacing: 8) {
+                    TimedCareChip(side: .breastLeft, phase: model.breastLeft, ticksEnabled: ticksEnabled) {
+                        model.toggleTimed(.breastLeft)
+                    }
+                    TimedCareChip(side: .breastRight, phase: model.breastRight, ticksEnabled: ticksEnabled) {
+                        model.toggleTimed(.breastRight)
+                    }
                 }
-                TimedCareChip(side: .breastRight, phase: model.breastRight, ticksEnabled: ticksEnabled) {
-                    model.toggleTimed(.breastRight)
-                }
+                CareMlAmountGrid(
+                    mls: model.snapshot.bottleChipMls,
+                    doneMl: model.bottleDoneMl,
+                    onSelect: { model.selectBottle(ml: $0) },
+                    onCustom: { showCustomBottle = true }
+                )
+                CareFooterSlot(content: model.footer(tip: model.snapshot.feedTip))
             }
-            CareFooterSlot(content: model.footer(tip: model.snapshot.feedTip))
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-}
-
-struct BottlePage: View {
-    @Bindable var model: BabyHomeStatusModel
-    @State private var showCustomBottle = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            CareSectionHeader(lead: "Bottle", detail: model.snapshot.bottleTip)
-            CareMlAmountGrid(
-                mls: model.snapshot.bottleChipMls,
-                doneMl: model.bottleDoneMl,
-                onSelect: { model.selectBottle(ml: $0) },
-                onCustom: { showCustomBottle = true }
-            )
-            CareFooterSlot(content: model.footer(tip: model.snapshot.feedTip))
-        }
-        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sheet(isPresented: $showCustomBottle) {
             CustomMlPicker(title: "Bottle ml") { ml in
@@ -101,6 +91,7 @@ struct DiaperPage: View {
 struct PumpPage: View {
     @Bindable var model: BabyHomeStatusModel
     @Environment(\.scenePhase) private var scenePhase
+    @State private var showCustom = false
 
     private var ticksEnabled: Bool {
         CareTimerTicks.shouldTick(
@@ -111,44 +102,33 @@ struct PumpPage: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            CareSectionHeader(lead: "Pump", detail: model.snapshot.pumpTip)
-            VStack(spacing: 6) {
-                HStack(spacing: 6) {
-                    TimedCareChip(side: .pumpLeft, phase: model.pumpLeft, ticksEnabled: ticksEnabled) {
-                        model.toggleTimed(.pumpLeft)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                CareSectionHeader(lead: "Pump", detail: model.snapshot.pumpTip)
+                VStack(spacing: 6) {
+                    HStack(spacing: 6) {
+                        TimedCareChip(side: .pumpLeft, phase: model.pumpLeft, ticksEnabled: ticksEnabled) {
+                            model.toggleTimed(.pumpLeft)
+                        }
+                        TimedCareChip(side: .pumpRight, phase: model.pumpRight, ticksEnabled: ticksEnabled) {
+                            model.toggleTimed(.pumpRight)
+                        }
                     }
-                    TimedCareChip(side: .pumpRight, phase: model.pumpRight, ticksEnabled: ticksEnabled) {
-                        model.toggleTimed(.pumpRight)
+                    TimedCareChip(side: .pumpBoth, phase: model.pumpBoth, ticksEnabled: ticksEnabled) {
+                        model.toggleTimed(.pumpBoth)
                     }
                 }
-                TimedCareChip(side: .pumpBoth, phase: model.pumpBoth, ticksEnabled: ticksEnabled) {
-                    model.toggleTimed(.pumpBoth)
-                }
+                CareMlAmountGrid(
+                    mls: model.snapshot.bottleChipMls,
+                    doneMl: model.pumpDoneMl,
+                    onSelect: { model.selectPump(ml: $0) },
+                    onCustom: { showCustom = true }
+                )
+                CareFooterSlot(content: model.footer(tip: model.snapshot.pumpTip))
             }
-            CareFooterSlot(content: model.footer(tip: "Swipe for amounts."))
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-}
-
-struct PumpAmountPage: View {
-    @Bindable var model: BabyHomeStatusModel
-    @State private var showCustom = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            CareSectionHeader(lead: "Pump amount", detail: "Pick an amount below.")
-            CareMlAmountGrid(
-                mls: model.snapshot.bottleChipMls,
-                doneMl: model.pumpDoneMl,
-                onSelect: { model.selectPump(ml: $0) },
-                onCustom: { showCustom = true }
-            )
-            CareFooterSlot(content: model.footer(tip: model.snapshot.pumpTip))
-        }
-        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sheet(isPresented: $showCustom) {
             CustomMlPicker(title: "Pump ml") { ml in
@@ -165,14 +145,17 @@ struct LastCarePage: View {
 
     var body: some View {
         let p = BabyPalette(scheme: scheme)
-        VStack(alignment: .leading, spacing: 10) {
-            CareSectionHeader(lead: model.snapshot.lastCareHeaderLead, detail: nil)
-            statusRow(model.snapshot.lastFeed, palette: p)
-            statusRow(model.snapshot.lastNap, palette: p)
-            statusRow(model.snapshot.lastDiaper, palette: p)
-            statusRow(model.snapshot.lastPump, palette: p)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                CareSectionHeader(lead: model.snapshot.lastCareHeaderLead, detail: nil)
+                statusRow(model.snapshot.lastFeed, palette: p)
+                statusRow(model.snapshot.lastNap, palette: p)
+                statusRow(model.snapshot.lastDiaper, palette: p)
+                statusRow(model.snapshot.lastPump, palette: p)
+            }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 

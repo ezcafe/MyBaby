@@ -70,9 +70,9 @@ struct BabyHomeStatusTests {
         #expect(BabyHomeDeepLink.page(from: url) == .sleep)
     }
 
-    @Test func deepLinkBottleMaps() {
+    @Test func deepLinkBottleMapsToFeed() {
         let url = URL(string: "mybaby://home?page=bottle")!
-        #expect(BabyHomeDeepLink.page(from: url) == .bottle)
+        #expect(BabyHomeDeepLink.page(from: url) == .feed)
     }
 
     @Test func deepLinkFeedMaps() {
@@ -107,31 +107,32 @@ struct BabyHomeStatusTests {
         #expect(BabyCarePrimarySignal.deepLinkPage(for: feedKind) == .feed)
     }
 
-    @Test func pageOrderIsFeedBottleSleepDiaperPumpPumpAmountLastCare() {
-        #expect(BabyHomePage.allCases.map(\.rawValue) == [0, 1, 2, 3, 4, 5, 6])
+    @Test func pageOrderIsFeedSleepDiaperPumpLastCare() {
+        #expect(BabyHomePage.allCases.map(\.rawValue) == [0, 1, 2, 3, 4])
         #expect(BabyHomePage.feed.queryValue == "feed")
-        #expect(BabyHomePage.bottle.queryValue == "bottle")
+        #expect(BabyHomePage.sleep.queryValue == "sleep")
+        #expect(BabyHomePage.diaper.queryValue == "diaper")
         #expect(BabyHomePage.pump.queryValue == "pump")
-        #expect(BabyHomePage.pumpAmount.queryValue == "pump-amount")
         #expect(BabyHomePage.lastCare.queryValue == "status")
     }
 
     @Test func pageMountKeepsSelectedAndNeighborsOnly() {
         #expect(BabyHomePage.shouldMount(.feed, selected: .feed))
-        #expect(BabyHomePage.shouldMount(.bottle, selected: .feed))
-        #expect(!BabyHomePage.shouldMount(.sleep, selected: .feed))
+        #expect(BabyHomePage.shouldMount(.sleep, selected: .feed))
+        #expect(!BabyHomePage.shouldMount(.diaper, selected: .feed))
         #expect(BabyHomePage.shouldMount(.sleep, selected: .diaper))
         #expect(BabyHomePage.shouldMount(.diaper, selected: .diaper))
         #expect(BabyHomePage.shouldMount(.pump, selected: .diaper))
         #expect(!BabyHomePage.shouldMount(.feed, selected: .diaper))
         #expect(!BabyHomePage.shouldMount(.lastCare, selected: .diaper))
-        #expect(BabyHomePage.shouldMount(.pumpAmount, selected: .lastCare))
-        #expect(!BabyHomePage.shouldMount(.pump, selected: .lastCare))
+        #expect(BabyHomePage.shouldMount(.pump, selected: .lastCare))
+        #expect(BabyHomePage.shouldMount(.lastCare, selected: .lastCare))
+        #expect(!BabyHomePage.shouldMount(.diaper, selected: .lastCare))
     }
 
-    @Test func deepLinkPumpAmountMaps() {
+    @Test func deepLinkPumpAmountMapsToPump() {
         let url = URL(string: "mybaby://home?page=pump-amount")!
-        #expect(BabyHomeDeepLink.page(from: url) == .pumpAmount)
+        #expect(BabyHomeDeepLink.page(from: url) == .pump)
     }
 
     // MARK: - Chip builder (web buildBabyBottleChipMls, Watch limit 3)

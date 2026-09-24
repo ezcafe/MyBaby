@@ -2,11 +2,9 @@ import Foundation
 
 enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
     case feed = 0
-    case bottle
     case sleep
     case diaper
     case pump
-    case pumpAmount
     case lastCare
 
     var id: Int { rawValue }
@@ -19,11 +17,9 @@ enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
     var queryValue: String {
         switch self {
         case .feed: return "feed"
-        case .bottle: return "bottle"
         case .sleep: return "sleep"
         case .diaper: return "diaper"
         case .pump: return "pump"
-        case .pumpAmount: return "pump-amount"
         case .lastCare: return "status"
         }
     }
@@ -31,12 +27,10 @@ enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
     static func fromQuery(_ value: String?) -> BabyHomePage? {
         guard let value else { return nil }
         switch value.lowercased() {
-        case "feed", "breast": return .feed
-        case "bottle": return .bottle
+        case "feed", "breast", "bottle": return .feed
         case "sleep", "nap": return .sleep
         case "diaper": return .diaper
-        case "pump": return .pump
-        case "pump-amount", "pumpamount", "pump_amount": return .pumpAmount
+        case "pump", "pump-amount", "pumpamount", "pump_amount": return .pump
         case "status", "lastcare", "last-care": return .lastCare
         default: return nil
         }

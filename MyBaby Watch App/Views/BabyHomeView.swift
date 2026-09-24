@@ -14,9 +14,6 @@ struct BabyHomeView: View {
             pageSlot(.feed, selected: selected) {
                 FeedPage(model: model)
             }
-            pageSlot(.bottle, selected: selected) {
-                BottlePage(model: model)
-            }
             pageSlot(.sleep, selected: selected) {
                 SleepPage(model: model)
             }
@@ -25,9 +22,6 @@ struct BabyHomeView: View {
             }
             pageSlot(.pump, selected: selected) {
                 PumpPage(model: model)
-            }
-            pageSlot(.pumpAmount, selected: selected) {
-                PumpAmountPage(model: model)
             }
             pageSlot(.lastCare, selected: selected) {
                 LastCarePage(model: model)
