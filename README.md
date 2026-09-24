@@ -1,6 +1,18 @@
 # MyBaby Watch — Baby Care home + companions
 
-UI-first watchOS 10+ companion for one-thumb care logging. Status uses **sample data** until GraphQL (`BABY_API.md`) is wired.
+WatchOS 10+ companion for one-thumb care logging. Use **sample** mode offline, or connect to your my-apps Baby GraphQL API.
+
+## Connect to API (live)
+
+1. On the web app: **Settings → API tokens** → enable **Baby Care** → create token → copy `mny_…`.
+2. On Watch: open the connect screen (first launch, or **gear** Settings from care home).
+3. Tap **Local** for simulator (`http://127.0.0.1:3000`) or paste your production `https://…` origin (no `/api/graphql/baby` suffix).
+4. Paste the token → **Save & connect**.
+5. Or **Continue with sample** to use offline sample data.
+
+Endpoint used: `POST {BASE_URL}/api/graphql/baby` (see my-apps `docs/BABY_API.md`).
+
+**Device + local HTTP:** Simulator can use `127.0.0.1`. A physical Watch cannot reach your Mac that way — use an HTTPS tunnel or deploy host. No blanket ATS “allow all HTTP” is enabled; prefer HTTPS for Production.
 
 ## Web → Watch page map
 
@@ -14,7 +26,7 @@ UI-first watchOS 10+ companion for one-thumb care logging. Status uses **sample 
 
 No app title chrome. Each care page: **header** (lead + quieter detail) → **controls** → **one footer** (recovery → fail → tip). Feed, Pump, and Last care scroll vertically when content is tall.
 
-Care taps follow web quick-care local rules: Feed / Bottle / Diaper end an open nap; Pump family does not. Sleep chip owns start/stop. Log chips use a short done flash only.
+Care taps follow web quick-care local rules: Feed / Bottle / Diaper end an open nap; Pump family does not. Sleep chip owns start/stop. Log chips use a short done flash only. Live mode: timer **starts** stay local; stops and one-shot logs call `babyQuickCare`.
 
 Deep links: `mybaby://home?page=feed|sleep|diaper|pump|status`  
 Aliases (same pages): `breast` / `bottle` → Feed; `nap` → Sleep; `pump-amount` → Pump.
@@ -30,10 +42,12 @@ Companions share one **Baby Care** widget kind for face and Smart Stack. They sh
 
 ## Project layout
 
-- `MyBaby Watch App/` — `BabyHomeView`, chips, auth stub
-- `BabyCareShared/` — snapshot, primary signal, deep link, care side effects, chip mls, timeline helper
+- `MyBaby Watch App/` — `BabyHomeView`, chips, connect UI
+- `BabyCareShared/` — snapshot, API config/client, mapper, deep link, care side effects, chip mls, timeline helper
 - `MyBaby Watch Widgets/` — complications + Smart Stack widgets
 
 ## Auth
 
-In-app **Connect iPhone / API token** is a stub. Previews and default run use sample mode (`bypassAuth`).
+- Production entry: `ContentView(bypassAuth: false)` — connect when not connected.
+- Previews: `bypassAuth: true`.
+- Token in Keychain; base URL in UserDefaults.

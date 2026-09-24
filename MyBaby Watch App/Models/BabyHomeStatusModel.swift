@@ -60,12 +60,19 @@ enum CareFooterResolver {
     }
 }
 
+enum CareDataMode: Equatable {
+    case sample
+    case live
+}
+
 @Observable
 @MainActor
 final class BabyHomeStatusModel {
     var snapshot: BabyHomeStatusSnapshot
     var selectedPage: BabyHomePage = .feed
-    var isConnected: Bool = true
+    var isConnected: Bool = false
+    var mode: CareDataMode = .sample
+    var needsReconnect: Bool = false
 
     var breastLeft: TimedChipPhase = .idle
     var breastRight: TimedChipPhase = .idle
@@ -88,11 +95,41 @@ final class BabyHomeStatusModel {
     /// Latest done-flash clear work — cancelled when a newer flash schedules.
     private(set) var clearDoneTask: Task<Void, Never>?
 
-    init(snapshot: BabyHomeStatusSnapshot = .sampleNextFeed()) {
+    /// Injected live client (nil in sample / previews).
+    var graphQLClient: (any BabyGraphQLClienting)?
+
+    /// Last quick-care id for retry tests / unknown failure.
+    private(set) var lastClientRequestId: String?
+
+    init(
+        snapshot: BabyHomeStatusSnapshot = .sampleNextFeed(),
+        isConnected: Bool = false,
+        mode: CareDataMode = .sample,
+        graphQLClient: (any BabyGraphQLClienting)? = nil
+    ) {
         self.snapshot = snapshot
+        self.isConnected = isConnected
+        self.mode = mode
+        self.graphQLClient = graphQLClient
         if let start = snapshot.openNapStartedAt {
             nap = .running(startedAt: start)
         }
+    }
+
+    func useSample() {
+        mode = .sample
+        graphQLClient = nil
+        isConnected = true
+        needsReconnect = false
+        statusFail = nil
+    }
+
+    func useLive(client: any BabyGraphQLClienting) {
+        mode = .live
+        graphQLClient = client
+        isConnected = true
+        needsReconnect = false
+        statusFail = nil
     }
 
     var primarySignal: BabyCarePrimaryKind {
@@ -121,32 +158,17 @@ final class BabyHomeStatusModel {
     func toggleTimed(_ side: TimedChipSide) {
         switch side {
         case .breastLeft:
-            applySideEffects(.breast)
-            if case .idle = breastLeft, case .running = breastRight {
-                breastRight = .idle
-            }
-            breastLeft = advance(breastLeft)
+            handleBreastToggle(active: .breastLeft)
         case .breastRight:
-            applySideEffects(.breast)
-            if case .idle = breastRight, case .running = breastLeft {
-                breastLeft = .idle
-            }
-            breastRight = advance(breastRight)
+            handleBreastToggle(active: .breastRight)
         case .nap:
-            applySideEffects(.sleep)
-            nap = advanceNap(nap)
+            handleNapToggle()
         case .pumpLeft:
-            applySideEffects(.pumpTimer)
-            clearOtherPumpSides(except: .pumpLeft)
-            pumpLeft = advance(pumpLeft)
+            handlePumpTimerToggle(side: .pumpLeft)
         case .pumpRight:
-            applySideEffects(.pumpTimer)
-            clearOtherPumpSides(except: .pumpRight)
-            pumpRight = advance(pumpRight)
+            handlePumpTimerToggle(side: .pumpRight)
         case .pumpBoth:
-            applySideEffects(.pumpTimer)
-            clearOtherPumpSides(except: .pumpBoth)
-            pumpBoth = advance(pumpBoth)
+            handlePumpTimerToggle(side: .pumpBoth)
         }
         BabyHaptics.timerChanged()
     }
@@ -157,6 +179,9 @@ final class BabyHomeStatusModel {
         bottleDoneMl = ml
         BabyHaptics.save()
         scheduleClearDone { self.bottleDoneMl = nil }
+        if mode == .live {
+            Task { await sendQuickCare(action: ["kind": "FORMULA", "amountMl": ml]) }
+        }
     }
 
     func selectPump(ml: Int) {
@@ -165,6 +190,9 @@ final class BabyHomeStatusModel {
         pumpDoneMl = ml
         BabyHaptics.save()
         scheduleClearDone { self.pumpDoneMl = nil }
+        if mode == .live {
+            Task { await sendQuickCare(action: ["kind": "PUMP_AMOUNT", "amountMl": ml]) }
+        }
     }
 
     func selectDiaper(_ kind: DiaperKind) {
@@ -173,10 +201,228 @@ final class BabyHomeStatusModel {
         diaperDoneKind = kind
         BabyHaptics.save()
         scheduleClearDone { self.diaperDoneKind = nil }
+        if mode == .live {
+            Task {
+                await sendQuickCare(action: [
+                    "kind": "DIAPER",
+                    "diaperKind": kind.apiValue,
+                ])
+            }
+        }
+    }
+
+    func loadLiveStatus() async {
+        guard mode == .live, let client = graphQLClient else { return }
+        let window = BabyLocalDayWindow.make()
+        do {
+            let vars = try JSONSerialization.data(withJSONObject: [
+                "dayFrom": window.dayFrom,
+                "dayTo": window.dayTo,
+            ])
+            let data = try await client.execute(
+                document: BabyGraphQLDocuments.homeQuickStatus,
+                variablesJSON: vars
+            )
+            let payload = try BabyHomeStatusMapper.decodeStatusData(data)
+            snapshot = BabyHomeStatusMapper.map(payload)
+            if let start = snapshot.openNapStartedAt {
+                nap = .running(startedAt: start)
+            } else if case .running = nap {
+                nap = .idle
+            }
+            statusFail = nil
+            needsReconnect = false
+        } catch {
+            applyLiveFailure(error)
+        }
+    }
+
+    /// Unknown-failure retry: reuse the same clientRequestId.
+    func retryQuickCare(
+        action: [String: Any],
+        breastRunning: [String: Any]? = nil,
+        clientRequestId: String
+    ) async {
+        await sendQuickCare(
+            action: action,
+            breastRunning: breastRunning,
+            clientRequestId: BabyClientRequestId.retrySame(clientRequestId)
+        )
     }
 
     func applyDeepLink(_ url: URL) {
         selectedPage = BabyHomeDeepLink.page(from: url)
+    }
+
+    private func handleBreastToggle(active: TimedChipSide) {
+        let apiSide = active == .breastLeft ? "breast_l" : "breast_r"
+        let phase = active == .breastLeft ? breastLeft : breastRight
+        switch phase {
+        case .idle:
+            applySideEffects(.breast)
+            if active == .breastLeft {
+                if case .running = breastRight { breastRight = .idle }
+                breastLeft = .running(startedAt: .now)
+            } else {
+                if case .running = breastLeft { breastLeft = .idle }
+                breastRight = .running(startedAt: .now)
+            }
+        case .running(let startedAt):
+            let duration = max(Int(Date.now.timeIntervalSince(startedAt)), 1)
+            applySideEffects(.breast)
+            scheduleClearDoneForSide()
+            if active == .breastLeft {
+                breastLeft = .done
+            } else {
+                breastRight = .done
+            }
+            if mode == .live {
+                Task {
+                    await sendQuickCare(
+                        action: ["kind": "BREAST", "side": apiSide],
+                        breastRunning: ["side": apiSide, "durationSec": duration]
+                    )
+                }
+            }
+        case .done:
+            if active == .breastLeft {
+                breastLeft = .idle
+            } else {
+                breastRight = .idle
+            }
+        }
+    }
+
+    private func handleNapToggle() {
+        switch nap {
+        case .idle:
+            applySideEffects(.sleep)
+            let started = Date.now
+            snapshot.openNapStartedAt = started
+            nap = .running(startedAt: started)
+            if mode == .live {
+                Task { await sendQuickCare(action: ["kind": "SLEEP"]) }
+            }
+        case .running:
+            applySideEffects(.sleep)
+            snapshot.openNapStartedAt = nil
+            scheduleClearDoneForSide()
+            nap = .done
+            if mode == .live {
+                Task { await sendQuickCare(action: ["kind": "SLEEP"]) }
+            }
+        case .done:
+            nap = .idle
+        }
+    }
+
+    private func handlePumpTimerToggle(side: TimedChipSide) {
+        let apiSide: String = {
+            switch side {
+            case .pumpLeft: return "pump_l"
+            case .pumpRight: return "pump_r"
+            case .pumpBoth: return "pump_both"
+            default: return "pump_l"
+            }
+        }()
+        let phase: TimedChipPhase = {
+            switch side {
+            case .pumpLeft: return pumpLeft
+            case .pumpRight: return pumpRight
+            case .pumpBoth: return pumpBoth
+            default: return .idle
+            }
+        }()
+        switch phase {
+        case .idle:
+            applySideEffects(.pumpTimer)
+            clearOtherPumpSides(except: side)
+            let running = TimedChipPhase.running(startedAt: .now)
+            switch side {
+            case .pumpLeft: pumpLeft = running
+            case .pumpRight: pumpRight = running
+            case .pumpBoth: pumpBoth = running
+            default: break
+            }
+        case .running(let startedAt):
+            let duration = max(Int(Date.now.timeIntervalSince(startedAt)), 1)
+            applySideEffects(.pumpTimer)
+            scheduleClearDoneForSide()
+            switch side {
+            case .pumpLeft: pumpLeft = .done
+            case .pumpRight: pumpRight = .done
+            case .pumpBoth: pumpBoth = .done
+            default: break
+            }
+            if mode == .live {
+                Task {
+                    await sendQuickCare(
+                        action: ["kind": "BREAST", "side": apiSide],
+                        breastRunning: ["side": apiSide, "durationSec": duration]
+                    )
+                }
+            }
+        case .done:
+            switch side {
+            case .pumpLeft: pumpLeft = .idle
+            case .pumpRight: pumpRight = .idle
+            case .pumpBoth: pumpBoth = .idle
+            default: break
+            }
+        }
+    }
+
+    private func sendQuickCare(
+        action: [String: Any],
+        breastRunning: [String: Any]? = nil,
+        clientRequestId: String? = nil
+    ) async {
+        guard mode == .live, let client = graphQLClient else { return }
+        let id = clientRequestId ?? BabyClientRequestId.make()
+        lastClientRequestId = id
+        var input: [String: Any] = [
+            "action": action,
+            "clientRequestId": id,
+        ]
+        if let breastRunning {
+            input["breastRunning"] = breastRunning
+        }
+        do {
+            let vars = try JSONSerialization.data(withJSONObject: ["input": input])
+            _ = try await client.execute(
+                document: BabyGraphQLDocuments.quickCare,
+                variablesJSON: vars
+            )
+            await loadLiveStatus()
+        } catch {
+            applyLiveFailure(error)
+        }
+    }
+
+    private func applyLiveFailure(_ error: Error) {
+        if let gql = error as? BabyGraphQLError {
+            switch gql {
+            case .graphQL(_, let code) where code == "UNAUTHORIZED" || code == "FORBIDDEN":
+                statusFail = "Unauthorized — reconnect"
+                needsReconnect = true
+            case .httpStatus(401), .httpStatus(403):
+                statusFail = "Unauthorized — reconnect"
+                needsReconnect = true
+            case .missingToken:
+                statusFail = "Missing API token"
+                needsReconnect = true
+            case .badURL:
+                statusFail = "Bad API URL"
+            case .graphQL(let message, _):
+                statusFail = message
+            case .httpStatus(let code):
+                statusFail = "HTTP \(code)"
+            case .decoding, .transport:
+                statusFail = "Network error — retry"
+            }
+        } else {
+            statusFail = "Network error — retry"
+        }
     }
 
     private func clearOtherPumpSides(except keep: TimedChipSide) {
@@ -214,33 +460,6 @@ final class BabyHomeStatusModel {
         }
         if case .running = breastRight {
             breastRight = .idle
-        }
-    }
-
-    private func advance(_ phase: TimedChipPhase) -> TimedChipPhase {
-        switch phase {
-        case .idle:
-            return .running(startedAt: .now)
-        case .running:
-            scheduleClearDoneForSide()
-            return .done
-        case .done:
-            return .idle
-        }
-    }
-
-    private func advanceNap(_ phase: TimedChipPhase) -> TimedChipPhase {
-        switch phase {
-        case .idle:
-            let started = Date.now
-            snapshot.openNapStartedAt = started
-            return .running(startedAt: started)
-        case .running:
-            snapshot.openNapStartedAt = nil
-            scheduleClearDoneForSide()
-            return .done
-        case .done:
-            return .idle
         }
     }
 

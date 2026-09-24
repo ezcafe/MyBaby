@@ -485,3 +485,212 @@ struct BabyHomeStatusTests {
         #expect(model.bottleDoneMl == 90)
     }
 }
+
+// MARK: - API config + GraphQL (watch-api-base-url)
+
+struct BabyAPIConfigTests {
+    @Test func normalizeStripsTrailingSlash() {
+        #expect(BabyAPIConfig.normalize("http://127.0.0.1:3000/") == "http://127.0.0.1:3000")
+    }
+
+    @Test func graphqlURLAppendsPathOnce() {
+        let url = BabyAPIConfig.graphqlURL(base: "https://example.com/")
+        #expect(url?.absoluteString == "https://example.com/api/graphql/baby")
+    }
+
+    @Test func invalidStringsFailValidation() {
+        #expect(!BabyAPIConfig.validate(""))
+        #expect(!BabyAPIConfig.validate("/relative"))
+        #expect(!BabyAPIConfig.validate("ftp://x"))
+        #expect(BabyAPIConfig.validate(BabyAPIConfig.localPreset))
+    }
+
+    @Test func localPresetIsLoopback() {
+        #expect(BabyAPIConfig.localPreset == "http://127.0.0.1:3000")
+        #expect(BabyAPIConfig.productionPreset.isEmpty)
+    }
+
+    @Test func authGateShowsConnectWhenNeeded() {
+        #expect(AuthGate.showsConnect(bypassAuth: false, isConnected: false))
+        #expect(!AuthGate.showsConnect(bypassAuth: true, isConnected: false))
+        #expect(!AuthGate.showsConnect(bypassAuth: false, isConnected: true))
+    }
+
+    @Test func saveBaseURLRoundTrip() {
+        let suite = "BabyAPIConfigTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        #expect(BabyAPIConfig.saveBaseURL("https://app.example/", defaults: defaults))
+        #expect(BabyAPIConfig.loadBaseURL(defaults: defaults) == "https://app.example")
+    }
+}
+
+struct BabyAPITokenStoreTests {
+    @Test func inMemoryRoundTripAndClear() throws {
+        let store = InMemoryBabyAPITokenStore()
+        #expect(store.load() == nil)
+        try store.save("mny_secret")
+        #expect(store.load() == "mny_secret")
+        try store.clear()
+        #expect(store.load() == nil)
+    }
+}
+
+struct BabyGraphQLRequestBuilderTests {
+    @Test func buildsURLHeadersAndBody() throws {
+        let (url, headers, body) = try BabyGraphQLRequestBuilder.makeRequest(
+            baseURLRaw: "http://127.0.0.1:3000",
+            token: "mny_test",
+            document: "{ ping }",
+            variablesJSON: #"{"a":1}"#.data(using: .utf8)
+        )
+        #expect(url.absoluteString == "http://127.0.0.1:3000/api/graphql/baby")
+        #expect(headers["Authorization"] == "Bearer mny_test")
+        let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+        #expect(json?["query"] as? String == "{ ping }")
+        let vars = json?["variables"] as? [String: Any]
+        #expect((vars?["a"] as? NSNumber)?.intValue == 1)
+    }
+
+    @Test func missingTokenFails() {
+        do {
+            _ = try BabyGraphQLRequestBuilder.makeRequest(
+                baseURLRaw: "http://127.0.0.1:3000",
+                token: nil,
+                document: "{ ping }",
+                variablesJSON: nil
+            )
+            Issue.record("Expected missingToken")
+        } catch let error as BabyGraphQLError {
+            #expect(error == .missingToken)
+        } catch {
+            Issue.record("Wrong error \(error)")
+        }
+    }
+
+    @Test func clientRequestIdRetrySame() {
+        let id = BabyClientRequestId.make()
+        #expect(BabyClientRequestId.retrySame(id) == id)
+        #expect(id.count == 32)
+    }
+}
+
+struct BabyLocalDayWindowTests {
+    @Test func dayWindowBounds() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(secondsFromGMT: 7 * 3600)!
+        let now = cal.date(from: DateComponents(year: 2026, month: 9, day: 24, hour: 15))!
+        let window = BabyLocalDayWindow.make(now: now, calendar: cal)
+        #expect(window.dayFrom < window.dayTo)
+        #expect(window.dayKey == "2026-09-24")
+    }
+}
+
+struct BabyHomeStatusMapperTests {
+    @Test func mapsFixtureSummariesAndOpenSleep() throws {
+        let json = """
+        {
+          "babyHomeQuickStatus": {
+            "lastFeed": { "summary": "Bottle 120 ml · 25m" },
+            "lastSleep": { "summary": "" },
+            "lastDiaper": { "summary": "Wet · 1h" },
+            "lastPump": null,
+            "openSleep": { "occurredAt": "2026-09-24T10:00:00.000+07:00" },
+            "birthDate": "2026-05-24",
+            "recentBottleMl": [120, 90]
+          }
+        }
+        """.data(using: .utf8)!
+        let payload = try BabyHomeStatusMapper.decodeStatusData(json)
+        let snap = BabyHomeStatusMapper.map(
+            payload,
+            now: ISO8601DateFormatter().date(from: "2026-09-24T12:00:00Z") ?? .now
+        )
+        #expect(snap.lastFeed.sentence == "Bottle 120 ml · 25m")
+        #expect(snap.lastFeed.isEmpty == false)
+        #expect(snap.lastNap.isEmpty == true)
+        #expect(snap.openNapStartedAt != nil)
+        #expect(snap.recentBottleMl == [120, 90])
+    }
+
+    @Test func missingFieldsAreSafe() throws {
+        let json = #"{"babyHomeQuickStatus":{}}"#.data(using: .utf8)!
+        let payload = try BabyHomeStatusMapper.decodeStatusData(json)
+        let snap = BabyHomeStatusMapper.map(payload)
+        #expect(snap.lastFeed.isEmpty)
+        #expect(snap.openNapStartedAt == nil)
+    }
+}
+
+@MainActor
+final class StubGraphQLClient: BabyGraphQLClienting, @unchecked Sendable {
+    var calls: [(document: String, variablesJSON: Data?)] = []
+    var statusData: Data
+    var error: Error?
+
+    init(statusData: Data = Data(#"{"babyHomeQuickStatus":{}}"#.utf8)) {
+        self.statusData = statusData
+    }
+
+    func execute(document: String, variablesJSON: Data?) async throws -> Data {
+        calls.append((document, variablesJSON))
+        if let error { throw error }
+        if document.contains("babyHomeQuickStatus") {
+            return statusData
+        }
+        return Data(#"{"babyQuickCare":{"replayed":false,"steps":[]}}"#.utf8)
+    }
+}
+
+struct BabyLiveModelTests {
+    @Test @MainActor func loadStatusUpdatesSnapshot() async throws {
+        let status = """
+        {"babyHomeQuickStatus":{"lastFeed":{"summary":"Live feed"},"birthDate":"2026-01-01"}}
+        """.data(using: .utf8)!
+        let stub = StubGraphQLClient(statusData: status)
+        let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
+        await model.loadLiveStatus()
+        #expect(model.snapshot.lastFeed.sentence == "Live feed")
+        #expect(stub.calls.count == 1)
+    }
+
+    @Test @MainActor func breastStartDoesNotCallClient() async {
+        let stub = StubGraphQLClient()
+        let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
+        model.toggleTimed(.breastLeft)
+        #expect(stub.calls.isEmpty)
+        if case .running = model.breastLeft {
+            // ok
+        } else {
+            Issue.record("Expected running")
+        }
+    }
+
+    @Test @MainActor func breastStopSendsBreastRunning() async {
+        let stub = StubGraphQLClient()
+        let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
+        model.toggleTimed(.breastLeft)
+        model.toggleTimed(.breastLeft)
+        // Allow async Task to run
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(stub.calls.contains { $0.document.contains("babyQuickCare") })
+        let careCall = stub.calls.first { $0.document.contains("babyQuickCare") }
+        let body = careCall?.variablesJSON.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        #expect(body.contains("breastRunning"))
+        #expect(body.contains("breast_l"))
+    }
+
+    @Test @MainActor func unauthorizedSetsReconnect() async {
+        let stub = StubGraphQLClient()
+        stub.error = BabyGraphQLError.graphQL(message: "nope", code: "UNAUTHORIZED")
+        let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
+        await model.loadLiveStatus()
+        #expect(model.needsReconnect)
+        #expect(model.statusFail?.contains("Unauthorized") == true)
+    }
+
+    @Test func retryHelperKeepsSameId() {
+        let id = "abc123def456abc123def456abc123de"
+        #expect(BabyClientRequestId.retrySame(id) == id)
+    }
+}
