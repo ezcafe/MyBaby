@@ -52,22 +52,24 @@ struct BabyHomeStatusSnapshot: Equatable, Sendable {
     }
 
     static func sampleNextFeed(now: Date = .now) -> BabyHomeStatusSnapshot {
+        let ageDays = 120
+        let band = CareGuideBottleBand.forAgeDays(ageDays)
         let recent: [Int] = []
         let chips = BabyBottleChipMls.build(
             recentBottleMl: recent,
-            snaps: BabyBottleChipMls.noBirthSnaps,
+            snaps: band.snaps,
             limit: 3
         )
         return BabyHomeStatusSnapshot(
-            title: ageTitle(ageDays: 120),
-            ageDays: 120,
+            title: ageTitle(ageDays: ageDays),
+            ageDays: ageDays,
             feedHeaderDetail: "Next feed is in about 12min.",
-            feedTip: "About 6–8 feeds a day.",
-            bottleTip: "Pick an amount below.",
+            feedTip: CareGuideTips.breastFeedsTip(ageDays: ageDays),
+            bottleTip: CareGuideTips.bottleTip(ageDays: ageDays),
             bottleChipMls: chips,
-            sleepTip: "Tap to start or end a nap.",
-            diaperTip: "Tap a kind to log a change.",
-            pumpTip: "Tap Left, Right, or Both to start.",
+            sleepTip: CareGuideTips.sleepTip(ageDays: ageDays),
+            diaperTip: CareGuideTips.diaperTip(ageDays: ageDays),
+            pumpTip: CareGuideTips.pumpTip(ageDays: ageDays),
             openNapStartedAt: nil,
             nextFeedInSeconds: 12 * 60,
             feedOverdueSeconds: nil,

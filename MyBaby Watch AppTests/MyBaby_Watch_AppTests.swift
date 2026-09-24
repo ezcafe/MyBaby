@@ -160,6 +160,52 @@ struct BabyHomeStatusTests {
         #expect(BabyHomeStatusSnapshot.sampleNextFeed().bottleChipMls.count == 3)
     }
 
+    // MARK: - Essay care guide (cross-app fixtures)
+
+    @Test func careGuideStageCutsMatchWeb() {
+        #expect(CareGuideStage.forAgeDays(0) == .newborn)
+        #expect(CareGuideStage.forAgeDays(30) == .newborn)
+        #expect(CareGuideStage.forAgeDays(31) == .m1_3)
+        #expect(CareGuideStage.forAgeDays(90) == .m1_3)
+        #expect(CareGuideStage.forAgeDays(91) == .m3_6)
+        #expect(CareGuideStage.forAgeDays(182) == .m3_6)
+        #expect(CareGuideStage.forAgeDays(183) == .m6_12)
+        #expect(CareGuideStage.forAgeDays(364) == .m6_12)
+        #expect(CareGuideStage.forAgeDays(365) == .m12_24)
+    }
+
+    @Test func essayBottleSnapsMatchCrossAppFixtures() {
+        #expect(CareGuideBottleBand.forAgeDays(0).snaps == [30, 50, 60])
+        #expect(CareGuideBottleBand.forAgeDays(45).snaps == [90, 110, 120])
+        #expect(CareGuideBottleBand.forAgeDays(75).snaps == [120, 140, 150])
+        #expect(CareGuideBottleBand.forAgeDays(120).snaps == [150, 180, 210])
+        #expect(CareGuideBottleBand.forAgeDays(200).snaps == [180, 210, 240])
+        #expect(CareGuideBottleBand.forAgeDays(400).snaps == [120, 150, 180])
+    }
+
+    @Test func tipsENAndVIDifferAndMatchEssay() {
+        let en = Locale(identifier: "en")
+        let vi = Locale(identifier: "vi")
+        let sleepEN = CareGuideTips.sleepTip(ageDays: 0, locale: en)
+        let sleepVI = CareGuideTips.sleepTip(ageDays: 0, locale: vi)
+        #expect(sleepEN.contains("16"))
+        #expect(sleepVI.contains("16"))
+        #expect(sleepEN != sleepVI)
+        #expect(CareGuideTips.diaperTip(ageDays: 120, locale: en).contains("Size M"))
+        #expect(CareGuideTips.diaperTip(ageDays: 120, locale: vi).contains("Size M"))
+        #expect(CareGuideTips.pumpTip(ageDays: 45, locale: en).contains("90"))
+        #expect(CareGuideTips.breastFeedsTip(ageDays: 0, locale: en).contains("8"))
+        #expect(CareGuideTips.breastFeedsTip(ageDays: 0, locale: en).contains("12"))
+    }
+
+    @Test func sampleTipsUseEssayStageForAge120() {
+        let snap = BabyHomeStatusSnapshot.sampleNextFeed()
+        #expect(snap.feedTip.contains("5") || snap.feedTip.contains("6"))
+        #expect(snap.bottleChipMls == [150, 180, 210])
+        #expect(snap.sleepTip.contains("14"))
+        #expect(snap.diaperTip.contains("Size M"))
+    }
+
     // MARK: - Care side effects (web quick-care parity)
 
     @Test func sideEffectsBreastEndsOpenNap() {
