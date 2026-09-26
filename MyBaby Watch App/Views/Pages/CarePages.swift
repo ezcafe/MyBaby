@@ -18,16 +18,30 @@ struct FeedPage: View {
             VStack(alignment: .leading, spacing: 12) {
                 CareSectionHeader(lead: "Feed", detail: model.snapshot.feedHeaderDetail)
                 HStack(spacing: 8) {
-                    TimedCareChip(side: .breastLeft, phase: model.breastLeft, ticksEnabled: ticksEnabled) {
+                    TimedCareChip(
+                        side: .breastLeft,
+                        phase: model.breastLeft,
+                        isFailed: model.isFailed(.timed(.breastLeft)),
+                        ticksEnabled: ticksEnabled
+                    ) {
                         model.toggleTimed(.breastLeft)
                     }
-                    TimedCareChip(side: .breastRight, phase: model.breastRight, ticksEnabled: ticksEnabled) {
+                    TimedCareChip(
+                        side: .breastRight,
+                        phase: model.breastRight,
+                        isFailed: model.isFailed(.timed(.breastRight)),
+                        ticksEnabled: ticksEnabled
+                    ) {
                         model.toggleTimed(.breastRight)
                     }
                 }
                 CareMlAmountGrid(
                     mls: model.snapshot.bottleChipMls,
                     doneMl: model.bottleDoneMl,
+                    failedMl: {
+                        if case .bottle(let ml) = model.lastFailedControl { return ml }
+                        return nil
+                    }(),
                     onSelect: { model.selectBottle(ml: $0) },
                     onCustom: { showCustomBottle = true }
                 )
@@ -61,7 +75,12 @@ struct SleepPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             CareSectionHeader(lead: "Sleep", detail: nil)
-            TimedCareChip(side: .nap, phase: model.nap, ticksEnabled: ticksEnabled) {
+            TimedCareChip(
+                side: .nap,
+                phase: model.nap,
+                isFailed: model.isFailed(.timed(.nap)),
+                ticksEnabled: ticksEnabled
+            ) {
                 model.toggleTimed(.nap)
             }
             CareFooterSlot(content: model.footer(tip: model.snapshot.sleepTip))
@@ -79,6 +98,10 @@ struct DiaperPage: View {
             CareSectionHeader(lead: "Diaper", detail: nil)
             DiaperKindGrid(
                 done: model.diaperDoneKind,
+                failed: {
+                    if case .diaper(let kind) = model.lastFailedControl { return kind }
+                    return nil
+                }(),
                 onSelect: { model.selectDiaper($0) }
             )
             CareFooterSlot(content: model.footer(tip: model.snapshot.diaperTip))
@@ -107,20 +130,39 @@ struct PumpPage: View {
                 CareSectionHeader(lead: "Pump", detail: model.snapshot.pumpTip)
                 VStack(spacing: 6) {
                     HStack(spacing: 6) {
-                        TimedCareChip(side: .pumpLeft, phase: model.pumpLeft, ticksEnabled: ticksEnabled) {
+                        TimedCareChip(
+                            side: .pumpLeft,
+                            phase: model.pumpLeft,
+                            isFailed: model.isFailed(.timed(.pumpLeft)),
+                            ticksEnabled: ticksEnabled
+                        ) {
                             model.toggleTimed(.pumpLeft)
                         }
-                        TimedCareChip(side: .pumpRight, phase: model.pumpRight, ticksEnabled: ticksEnabled) {
+                        TimedCareChip(
+                            side: .pumpRight,
+                            phase: model.pumpRight,
+                            isFailed: model.isFailed(.timed(.pumpRight)),
+                            ticksEnabled: ticksEnabled
+                        ) {
                             model.toggleTimed(.pumpRight)
                         }
                     }
-                    TimedCareChip(side: .pumpBoth, phase: model.pumpBoth, ticksEnabled: ticksEnabled) {
+                    TimedCareChip(
+                        side: .pumpBoth,
+                        phase: model.pumpBoth,
+                        isFailed: model.isFailed(.timed(.pumpBoth)),
+                        ticksEnabled: ticksEnabled
+                    ) {
                         model.toggleTimed(.pumpBoth)
                     }
                 }
                 CareMlAmountGrid(
                     mls: model.snapshot.bottleChipMls,
                     doneMl: model.pumpDoneMl,
+                    failedMl: {
+                        if case .pump(let ml) = model.lastFailedControl { return ml }
+                        return nil
+                    }(),
                     onSelect: { model.selectPump(ml: $0) },
                     onCustom: { showCustom = true }
                 )
@@ -173,6 +215,47 @@ struct LastCarePage: View {
                 .minimumScaleFactor(0.85)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct SettingsPage: View {
+    @Bindable var model: BabyHomeStatusModel
+    @Environment(\.colorScheme) private var scheme
+
+    private var hostLine: String {
+        let raw = BabyAPIConfig.loadBaseURL()
+        if let origin = BabyAPIConfig.normalize(raw) {
+            return "Connected · \(origin.replacingOccurrences(of: "https://", with: "").replacingOccurrences(of: "http://", with: ""))"
+        }
+        return raw.isEmpty ? "Not connected" : "Connected · \(raw)"
+    }
+
+    var body: some View {
+        let p = BabyPalette(scheme: scheme)
+        VStack(alignment: .leading, spacing: 12) {
+            CareSectionHeader(lead: "Settings", detail: nil)
+            Text(hostLine)
+                .font(BabyTokens.secondaryFont)
+                .foregroundStyle(p.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Log out") {
+                model.logout()
+            }
+            .font(.headline.weight(.bold))
+            .foregroundStyle(p.danger)
+            .frame(maxWidth: .infinity)
+            .frame(height: BabyTokens.careChipHeight)
+            .background(p.surface)
+            .clipShape(RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous)
+                    .stroke(p.danger, lineWidth: 1)
+            )
+            .buttonStyle(.plain)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

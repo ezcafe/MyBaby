@@ -6,6 +6,7 @@ enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
     case diaper
     case pump
     case lastCare
+    case settings
 
     var id: Int { rawValue }
 
@@ -21,6 +22,7 @@ enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
         case .diaper: return "diaper"
         case .pump: return "pump"
         case .lastCare: return "status"
+        case .settings: return "settings"
         }
     }
 
@@ -32,6 +34,7 @@ enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
         case "diaper": return .diaper
         case "pump", "pump-amount", "pumpamount", "pump_amount": return .pump
         case "status", "lastcare", "last-care": return .lastCare
+        case "settings": return .settings
         default: return nil
         }
     }

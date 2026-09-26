@@ -107,13 +107,14 @@ struct BabyHomeStatusTests {
         #expect(BabyCarePrimarySignal.deepLinkPage(for: feedKind) == .feed)
     }
 
-    @Test func pageOrderIsFeedSleepDiaperPumpLastCare() {
-        #expect(BabyHomePage.allCases.map(\.rawValue) == [0, 1, 2, 3, 4])
+    @Test func pageOrderIsFeedSleepDiaperPumpLastCareSettings() {
+        #expect(BabyHomePage.allCases.map(\.rawValue) == [0, 1, 2, 3, 4, 5])
         #expect(BabyHomePage.feed.queryValue == "feed")
         #expect(BabyHomePage.sleep.queryValue == "sleep")
         #expect(BabyHomePage.diaper.queryValue == "diaper")
         #expect(BabyHomePage.pump.queryValue == "pump")
         #expect(BabyHomePage.lastCare.queryValue == "status")
+        #expect(BabyHomePage.settings.queryValue == "settings")
     }
 
     @Test func pageMountKeepsSelectedAndNeighborsOnly() {
@@ -127,7 +128,11 @@ struct BabyHomeStatusTests {
         #expect(!BabyHomePage.shouldMount(.lastCare, selected: .diaper))
         #expect(BabyHomePage.shouldMount(.pump, selected: .lastCare))
         #expect(BabyHomePage.shouldMount(.lastCare, selected: .lastCare))
+        #expect(BabyHomePage.shouldMount(.settings, selected: .lastCare))
         #expect(!BabyHomePage.shouldMount(.diaper, selected: .lastCare))
+        #expect(BabyHomePage.shouldMount(.lastCare, selected: .settings))
+        #expect(BabyHomePage.shouldMount(.settings, selected: .settings))
+        #expect(!BabyHomePage.shouldMount(.pump, selected: .settings))
     }
 
     @Test func deepLinkPumpAmountMapsToPump() {
@@ -527,6 +532,40 @@ struct BabyAPIConfigTests {
         #expect(BabyAPIConfig.saveBaseURL("https://app.example/", defaults: defaults))
         #expect(BabyAPIConfig.loadBaseURL(defaults: defaults) == "https://app.example")
     }
+
+    @Test func resolveHostPresetLocal() {
+        #expect(
+            BabyAPIConfig.resolveHostPreset(for: BabyAPIConfig.localPreset) == .local
+        )
+        #expect(
+            BabyAPIConfig.resolveHostPreset(for: "http://127.0.0.1:3000/") == .local
+        )
+    }
+
+    @Test func resolveHostPresetProductionWhenDistinct() {
+        let prod = "https://app.example.com"
+        #expect(
+            BabyAPIConfig.resolveHostPreset(
+                for: prod,
+                localPreset: BabyAPIConfig.localPreset,
+                productionPreset: prod
+            ) == .production
+        )
+    }
+
+    @Test func resolveHostPresetNoneForEmptyOrOther() {
+        #expect(BabyAPIConfig.resolveHostPreset(for: "") == .none)
+        #expect(BabyAPIConfig.resolveHostPreset(for: "not-a-url") == .none)
+        #expect(
+            BabyAPIConfig.resolveHostPreset(for: "https://other.example/") == .none
+        )
+    }
+
+    @Test func urlFieldVisibleOnlyForProduction() {
+        #expect(!ConnectHostURLField.isVisible(selected: .local))
+        #expect(ConnectHostURLField.isVisible(selected: .production))
+        #expect(!ConnectHostURLField.isVisible(selected: .none))
+    }
 }
 
 struct BabyAPITokenStoreTests {
@@ -702,6 +741,34 @@ struct BabyLiveModelTests {
         await model.loadLiveStatus()
         #expect(model.needsReconnect)
         #expect(model.statusFail?.contains("Unauthorized") == true)
+    }
+
+    @Test @MainActor func bottleSendFailSetsFailedControl() async {
+        let stub = StubGraphQLClient()
+        stub.error = BabyGraphQLError.transport
+        let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
+        model.selectBottle(ml: 90)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(model.lastFailedControl == .bottle(ml: 90))
+        #expect(model.statusFail?.isEmpty == false)
+        #expect(model.isFailed(.bottle(ml: 90)))
+    }
+
+    @Test @MainActor func logoutClearsTokenAndDisconnects() {
+        let store = InMemoryBabyAPITokenStore()
+        try? store.save("mny_test_token")
+        let model = BabyHomeStatusModel(isConnected: true, mode: .live, graphQLClient: StubGraphQLClient())
+        model.logout(tokenStore: store)
+        #expect(store.load() == nil)
+        #expect(!model.isConnected)
+        #expect(model.graphQLClient == nil)
+        #expect(model.lastFailedControl == nil)
+        #expect(AuthGate.showsConnect(bypassAuth: false, isConnected: model.isConnected))
+    }
+
+    @Test func connectGuideCopyIsPresent() {
+        #expect(ConnectGuideCopy.title == "Quick connect")
+        #expect(ConnectGuideCopy.steps.count == 3)
     }
 
     @Test func retryHelperKeepsSameId() {

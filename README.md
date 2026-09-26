@@ -4,12 +4,12 @@ WatchOS 10+ companion for one-thumb care logging. Use **sample** mode offline, o
 
 ## Connect to API (live)
 
-1. On the web app (laptop): **Settings → API tokens → Watch pairing → Generate code**.
+1. On the web app (laptop): **Settings → API tokens → Device pairing** → select **Baby Care** → **Generate code**.
 2. On Watch: open the connect screen (first launch, or **gear** Settings from care home).
 3. Tap **Production** (or **Local** for simulator) so the pairing host is set.
 4. Enter the short pairing code → **Save & connect**.
-5. Or **Continue with sample** for offline sample data.
-6. **Advanced:** expand paste URL & token if you need a manual `mny_…` (Local simulator).
+5. Or use **Advanced** paste URL & token if you need a manual `mny_…` (Local simulator).
+6. After **Log out** (Settings page), you must Connect again before care. Quick connect steps are at the bottom of the connect screen.
 
 Redeem: `POST {PAIRING_ORIGIN}/api/watch/pair/redeem`. Care calls: `POST {BASE_URL}/api/graphql/baby` (see my-apps `docs/BABY_API.md`).
 
@@ -26,8 +26,9 @@ Redeem: `POST {PAIRING_ORIGIN}/api/watch/pair/redeem`. Care calls: `POST {BASE_U
 | Diaper | **3 · Diaper** |
 | Pump timers + amount | **4 · Pump** (L / R / Both + ml chips + Custom; vertical scroll) |
 | Last care status | **5 · Last care** (status rows; vertical scroll) |
+| Settings / logout | **6 · Settings** (host + Log out) |
 
-No app title chrome. Each care page: **header** (lead + quieter detail) → **controls** → **one footer** (recovery → fail → tip). Feed, Pump, and Last care scroll vertically when content is tall.
+No app title chrome. Each care page: **header** (lead + quieter detail) → **controls** → **one footer** (recovery → fail → tip). Feed, Pump, and Last care scroll vertically when content is tall. Live send failures also show **Failed** on the trigger chip.
 
 Care taps follow web quick-care local rules: Feed / Bottle / Diaper end an open nap; Pump family does not. Sleep chip owns start/stop. Log chips use a short done flash only. Live mode: timer **starts** stay local; stops and one-shot logs call `babyQuickCare`.
 

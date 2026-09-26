@@ -27,6 +27,9 @@ struct BabyHomeView: View {
             pageSlot(.lastCare, selected: selected) {
                 LastCarePage(model: model)
             }
+            pageSlot(.settings, selected: selected) {
+                SettingsPage(model: model)
+            }
         }
         .tabViewStyle(.page)
         .background(p.background)

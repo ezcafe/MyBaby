@@ -30,6 +30,14 @@ enum BabyTokens {
         scheme == .dark ? Color(hex: 0x1A1A1A) : Color(hex: 0xFFFFFF)
     }
 
+    static func danger(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(hex: 0xF87171) : Color(hex: 0xDC2626)
+    }
+
+    static func dangerSurface(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(hex: 0x3F1D1D) : Color(hex: 0xFEF2F2)
+    }
+
     static let outerRadius: CGFloat = 8
     static let nestedRadius: CGFloat = 6
     static let minHit: CGFloat = 44
@@ -50,4 +58,6 @@ struct BabyPalette {
     var accentForeground: Color { BabyTokens.accentForeground(scheme) }
     var hairline: Color { BabyTokens.hairline(scheme) }
     var surface: Color { BabyTokens.surface(scheme) }
+    var danger: Color { BabyTokens.danger(scheme) }
+    var dangerSurface: Color { BabyTokens.dangerSurface(scheme) }
 }

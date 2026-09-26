@@ -71,6 +71,7 @@ struct TimedCareChip: View {
     @Environment(\.colorScheme) private var scheme
     let side: TimedChipSide
     let phase: TimedChipPhase
+    var isFailed: Bool = false
     /// When false, running chips show a static elapsed label (no 1 Hz TimelineView).
     var ticksEnabled: Bool = true
     let action: () -> Void
@@ -84,6 +85,7 @@ struct TimedCareChip: View {
     }
 
     private var useTimeline: Bool {
+        if isFailed { return false }
         if case .running = phase {
             return ticksEnabled
         }
@@ -110,10 +112,10 @@ struct TimedCareChip: View {
         let label = VStack(alignment: .leading, spacing: isCompact ? 1 : 4) {
             Text(title)
                 .font(isCompact ? .caption.weight(.bold) : .headline.weight(.bold))
-                .foregroundStyle(isAccent ? palette.accentForeground : palette.foreground)
+                .foregroundStyle(titleColor(palette))
             Text(subtitle(now: now))
                 .font(BabyTokens.secondaryFont)
-                .foregroundStyle(isAccent ? palette.accentForeground.opacity(0.85) : palette.muted)
+                .foregroundStyle(subtitleColor(palette))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -128,21 +130,38 @@ struct TimedCareChip: View {
                     .padding(10)
             }
         }
-        .background(isAccent ? palette.accent : palette.surface)
+        .background(chipBackground(palette))
         .clipShape(RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous)
-                .stroke(palette.hairline, lineWidth: 1)
+                .stroke(isFailed ? palette.danger : palette.hairline, lineWidth: 1)
         )
     }
 
+    private func titleColor(_ palette: BabyPalette) -> Color {
+        if isFailed { return palette.danger }
+        return isAccent ? palette.accentForeground : palette.foreground
+    }
+
+    private func subtitleColor(_ palette: BabyPalette) -> Color {
+        if isFailed { return palette.danger }
+        return isAccent ? palette.accentForeground.opacity(0.85) : palette.muted
+    }
+
+    private func chipBackground(_ palette: BabyPalette) -> Color {
+        if isFailed { return palette.dangerSurface }
+        return isAccent ? palette.accent : palette.surface
+    }
+
     private var isAccent: Bool {
+        if isFailed { return false }
         if case .running = phase { return true }
         if case .done = phase { return true }
         return false
     }
 
     private var title: String {
+        if isFailed { return "Failed" }
         switch phase {
         case .idle:
             return side.title
@@ -154,6 +173,7 @@ struct TimedCareChip: View {
     }
 
     private func subtitle(now: Date) -> String {
+        if isFailed { return " " }
         switch phase {
         case .idle:
             return side.idleSubtitle
@@ -170,6 +190,7 @@ struct CareMlAmountGrid: View {
     @Environment(\.colorScheme) private var scheme
     let mls: [Int]
     let doneMl: Int?
+    var failedMl: Int? = nil
     let onSelect: (Int) -> Void
     let onCustom: () -> Void
 
@@ -179,20 +200,23 @@ struct CareMlAmountGrid: View {
         VStack(spacing: 6) {
             HStack(spacing: 6) {
                 ForEach(chips, id: \.self) { ml in
-                    let on = doneMl == ml
-                    Button("\(ml)") {
+                    let on = doneMl == ml && failedMl != ml
+                    let failed = failedMl == ml
+                    Button {
                         onSelect(ml)
+                    } label: {
+                        Text(failed ? "Failed" : "\(ml)")
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(failed ? p.danger : (on ? p.accentForeground : p.foreground))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: BabyTokens.careChipHeight)
+                            .background(failed ? p.dangerSurface : (on ? p.accent : p.surface))
+                            .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
+                                    .stroke(failed ? p.danger : p.hairline, lineWidth: 1)
+                            )
                     }
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(on ? p.accentForeground : p.foreground)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: BabyTokens.careChipHeight)
-                    .background(on ? p.accent : p.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
-                            .stroke(p.hairline, lineWidth: 1)
-                    )
                     .buttonStyle(.plain)
                 }
             }
@@ -221,6 +245,7 @@ struct DiaperKindGrid: View {
 
     @Environment(\.colorScheme) private var scheme
     let done: DiaperKind?
+    var failed: DiaperKind? = nil
     let onSelect: (DiaperKind) -> Void
 
     private let columns = [
@@ -232,24 +257,25 @@ struct DiaperKindGrid: View {
         let p = BabyPalette(scheme: scheme)
         LazyVGrid(columns: columns, spacing: 6) {
             ForEach(DiaperKind.allCases) { kind in
-                let on = done == kind
+                let on = done == kind && failed != kind
+                let isFail = failed == kind
                 Button {
                     onSelect(kind)
                 } label: {
                     VStack(spacing: Self.iconTitleSpacing) {
                         Image(systemName: kind.systemImage)
                             .font(.caption.weight(.semibold))
-                        Text(kind.rawValue)
+                        Text(isFail ? "Failed" : kind.rawValue)
                             .font(Self.titleFont)
                     }
-                    .foregroundStyle(on ? p.accentForeground : p.foreground)
+                    .foregroundStyle(isFail ? p.danger : (on ? p.accentForeground : p.foreground))
                     .frame(maxWidth: .infinity)
                     .frame(height: Self.chipHeight)
-                    .background(on ? p.accent : p.surface)
+                    .background(isFail ? p.dangerSurface : (on ? p.accent : p.surface))
                     .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
-                            .stroke(p.hairline, lineWidth: 1)
+                            .stroke(isFail ? p.danger : p.hairline, lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)

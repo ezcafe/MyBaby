@@ -1,11 +1,22 @@
 import SwiftUI
 
+enum ConnectGuideCopy {
+    static let title = "Quick connect"
+    static let steps: [String] = [
+        "On web: Settings → Device pairing → Baby Care → Generate code",
+        "Pick Production (or Local for simulator)",
+        "Enter code → Save & connect",
+    ]
+}
+
 struct AuthConnectView: View {
     @Bindable var model: BabyHomeStatusModel
     var onDismiss: (() -> Void)?
     @Environment(\.colorScheme) private var scheme
 
-    @State private var baseURL: String = BabyAPIConfig.loadBaseURL()
+    /// Default: Local selected, URL field hidden (`localPreset` under the hood).
+    @State private var baseURL: String = BabyAPIConfig.localPreset
+    @State private var selectedPreset: ConnectHostPreset = .local
     @State private var pairingCode: String = ""
     @State private var showAdvanced = false
     @State private var token: String = BabyAPITokenStore().load() ?? ""
@@ -13,6 +24,9 @@ struct AuthConnectView: View {
     @State private var connecting = false
 
     private let tokenStore = BabyAPITokenStore()
+
+    /// URL field only when Production is selected (Local hides it).
+    private var showsURLField: Bool { ConnectHostURLField.isVisible(selected: selectedPreset) }
 
     var body: some View {
         let p = BabyPalette(scheme: scheme)
@@ -22,22 +36,24 @@ struct AuthConnectView: View {
                     .font(.headline)
                     .multilineTextAlignment(.center)
 
-                Text(displayHost)
-                    .font(.caption2)
-                    .foregroundStyle(p.muted)
-                    .multilineTextAlignment(.center)
-
                 HStack(spacing: 6) {
-                    Button("Local") {
+                    presetButton("Local", preset: .local, palette: p) {
                         baseURL = BabyAPIConfig.localPreset
+                        selectedPreset = .local
                         errorText = nil
                     }
-                    Button("Production") {
-                        baseURL = BabyAPIConfig.productionPreset
+                    presetButton("Production", preset: .production, palette: p) {
+                        baseURL = ""
+                        selectedPreset = .production
                         errorText = nil
                     }
                 }
-                .font(.caption2)
+
+                if showsURLField {
+                    TextField("https://…", text: urlFieldBinding)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
 
                 TextField("Pairing code", text: $pairingCode)
                     .textInputAutocapitalization(.characters)
@@ -56,21 +72,12 @@ struct AuthConnectView: View {
                 .tint(p.accent)
                 .disabled(connecting)
 
-                Button("Continue with sample") {
-                    model.useSample()
-                    onDismiss?()
-                }
-                .font(.caption)
-
-                Button(showAdvanced ? "Hide advanced paste" : "Advanced: paste URL & token") {
+                Button(showAdvanced ? "Hide advanced paste" : "Advanced: paste token") {
                     showAdvanced.toggle()
                 }
                 .font(.caption2)
 
                 if showAdvanced {
-                    TextField("https://…", text: $baseURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
                     SecureField("mny_… token", text: $token)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -79,17 +86,64 @@ struct AuthConnectView: View {
                     }
                     .font(.caption2)
                 }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(ConnectGuideCopy.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(p.foreground)
+                    ForEach(Array(ConnectGuideCopy.steps.enumerated()), id: \.offset) { index, step in
+                        Text("\(index + 1). \(step)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(p.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(p.surface)
+                .clipShape(RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous)
+                        .stroke(p.hairline, lineWidth: 1)
+                )
             }
             .padding()
         }
         .background(p.background)
     }
 
-    private var displayHost: String {
-        if let origin = BabyAPIConfig.normalize(baseURL) {
-            return origin
+    /// Edits keep Production selected so the field stays visible (Local tap is the only way to hide it).
+    private var urlFieldBinding: Binding<String> {
+        Binding(
+            get: { baseURL },
+            set: { newValue in
+                baseURL = newValue
+                selectedPreset = .production
+            }
+        )
+    }
+
+    private func presetButton(
+        _ title: String,
+        preset: ConnectHostPreset,
+        palette: BabyPalette,
+        action: @escaping () -> Void
+    ) -> some View {
+        let on = selectedPreset == preset
+        return Button(action: action) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(on ? palette.accentForeground : palette.foreground)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .background(on ? palette.accent : palette.surface)
+                .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
+                        .stroke(palette.hairline, lineWidth: 1)
+                )
         }
-        return baseURL.isEmpty ? "No URL set" : "Invalid URL"
+        .buttonStyle(.plain)
     }
 
     @MainActor
@@ -99,7 +153,12 @@ struct AuthConnectView: View {
         if !code.isEmpty {
             connecting = true
             defer { connecting = false }
-            let origin = BabyAPIConfig.normalize(baseURL) ?? BabyAPIConfig.productionPairingOrigin
+            guard let origin = BabyAPIConfig.normalize(baseURL) ?? BabyAPIConfig.normalize(
+                BabyAPIConfig.productionPairingOrigin
+            ) else {
+                errorText = "Enter a valid http(s) URL"
+                return
+            }
             let client = WatchPairClient(pairingOriginRaw: origin)
             do {
                 let result = try await client.redeem(code: code)
@@ -109,6 +168,7 @@ struct AuthConnectView: View {
                 }
                 try tokenStore.save(result.token)
                 baseURL = result.baseURL
+                selectedPreset = .production
                 token = result.token
                 pairingCode = ""
                 enterLive(token: result.token)

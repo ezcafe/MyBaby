@@ -65,6 +65,14 @@ enum CareDataMode: Equatable {
     case live
 }
 
+/// Which care control last failed a live send (chip fail chrome).
+enum CareFailedControl: Equatable {
+    case timed(TimedChipSide)
+    case bottle(ml: Int)
+    case pump(ml: Int)
+    case diaper(DiaperKind)
+}
+
 @Observable
 @MainActor
 final class BabyHomeStatusModel {
@@ -91,6 +99,7 @@ final class BabyHomeStatusModel {
 
     var pendingRecovery: String?
     var statusFail: String?
+    var lastFailedControl: CareFailedControl?
 
     /// Latest done-flash clear work — cancelled when a newer flash schedules.
     private(set) var clearDoneTask: Task<Void, Never>?
@@ -122,6 +131,7 @@ final class BabyHomeStatusModel {
         isConnected = true
         needsReconnect = false
         statusFail = nil
+        lastFailedControl = nil
     }
 
     func useLive(client: any BabyGraphQLClienting) {
@@ -130,6 +140,22 @@ final class BabyHomeStatusModel {
         isConnected = true
         needsReconnect = false
         statusFail = nil
+        lastFailedControl = nil
+    }
+
+    /// Clear Keychain token and leave care until user Connects again.
+    func logout(tokenStore: any BabyAPITokenStoring = BabyAPITokenStore()) {
+        try? tokenStore.clear()
+        graphQLClient = nil
+        mode = .sample
+        isConnected = false
+        needsReconnect = false
+        statusFail = nil
+        lastFailedControl = nil
+    }
+
+    func isFailed(_ control: CareFailedControl) -> Bool {
+        lastFailedControl == control
     }
 
     var primarySignal: BabyCarePrimaryKind {
@@ -177,10 +203,11 @@ final class BabyHomeStatusModel {
         applySideEffects(.bottle)
         selectedBottleMl = nil
         bottleDoneMl = ml
+        lastFailedControl = nil
         BabyHaptics.save()
         scheduleClearDone { self.bottleDoneMl = nil }
         if mode == .live {
-            Task { await sendQuickCare(action: ["kind": "FORMULA", "amountMl": ml]) }
+            Task { await sendQuickCare(action: ["kind": "FORMULA", "amountMl": ml], control: .bottle(ml: ml)) }
         }
     }
 
@@ -188,10 +215,11 @@ final class BabyHomeStatusModel {
         applySideEffects(.pumpAmount)
         selectedPumpMl = nil
         pumpDoneMl = ml
+        lastFailedControl = nil
         BabyHaptics.save()
         scheduleClearDone { self.pumpDoneMl = nil }
         if mode == .live {
-            Task { await sendQuickCare(action: ["kind": "PUMP_AMOUNT", "amountMl": ml]) }
+            Task { await sendQuickCare(action: ["kind": "PUMP_AMOUNT", "amountMl": ml], control: .pump(ml: ml)) }
         }
     }
 
@@ -199,14 +227,18 @@ final class BabyHomeStatusModel {
         applySideEffects(.diaper)
         selectedDiaperKind = nil
         diaperDoneKind = kind
+        lastFailedControl = nil
         BabyHaptics.save()
         scheduleClearDone { self.diaperDoneKind = nil }
         if mode == .live {
             Task {
-                await sendQuickCare(action: [
-                    "kind": "DIAPER",
-                    "diaperKind": kind.apiValue,
-                ])
+                await sendQuickCare(
+                    action: [
+                        "kind": "DIAPER",
+                        "diaperKind": kind.apiValue,
+                    ],
+                    control: .diaper(kind)
+                )
             }
         }
     }
@@ -231,6 +263,7 @@ final class BabyHomeStatusModel {
                 nap = .idle
             }
             statusFail = nil
+            lastFailedControl = nil
             needsReconnect = false
         } catch {
             applyLiveFailure(error)
@@ -260,6 +293,7 @@ final class BabyHomeStatusModel {
         switch phase {
         case .idle:
             applySideEffects(.breast)
+            lastFailedControl = nil
             if active == .breastLeft {
                 if case .running = breastRight { breastRight = .idle }
                 breastLeft = .running(startedAt: .now)
@@ -270,6 +304,7 @@ final class BabyHomeStatusModel {
         case .running(let startedAt):
             let duration = max(Int(Date.now.timeIntervalSince(startedAt)), 1)
             applySideEffects(.breast)
+            lastFailedControl = nil
             scheduleClearDoneForSide()
             if active == .breastLeft {
                 breastLeft = .done
@@ -280,7 +315,8 @@ final class BabyHomeStatusModel {
                 Task {
                     await sendQuickCare(
                         action: ["kind": "BREAST", "side": apiSide],
-                        breastRunning: ["side": apiSide, "durationSec": duration]
+                        breastRunning: ["side": apiSide, "durationSec": duration],
+                        control: .timed(active)
                     )
                 }
             }
@@ -300,16 +336,18 @@ final class BabyHomeStatusModel {
             let started = Date.now
             snapshot.openNapStartedAt = started
             nap = .running(startedAt: started)
+            lastFailedControl = nil
             if mode == .live {
-                Task { await sendQuickCare(action: ["kind": "SLEEP"]) }
+                Task { await sendQuickCare(action: ["kind": "SLEEP"], control: .timed(.nap)) }
             }
         case .running:
             applySideEffects(.sleep)
             snapshot.openNapStartedAt = nil
             scheduleClearDoneForSide()
             nap = .done
+            lastFailedControl = nil
             if mode == .live {
-                Task { await sendQuickCare(action: ["kind": "SLEEP"]) }
+                Task { await sendQuickCare(action: ["kind": "SLEEP"], control: .timed(.nap)) }
             }
         case .done:
             nap = .idle
@@ -336,6 +374,7 @@ final class BabyHomeStatusModel {
         switch phase {
         case .idle:
             applySideEffects(.pumpTimer)
+            lastFailedControl = nil
             clearOtherPumpSides(except: side)
             let running = TimedChipPhase.running(startedAt: .now)
             switch side {
@@ -347,6 +386,7 @@ final class BabyHomeStatusModel {
         case .running(let startedAt):
             let duration = max(Int(Date.now.timeIntervalSince(startedAt)), 1)
             applySideEffects(.pumpTimer)
+            lastFailedControl = nil
             scheduleClearDoneForSide()
             switch side {
             case .pumpLeft: pumpLeft = .done
@@ -358,7 +398,8 @@ final class BabyHomeStatusModel {
                 Task {
                     await sendQuickCare(
                         action: ["kind": "BREAST", "side": apiSide],
-                        breastRunning: ["side": apiSide, "durationSec": duration]
+                        breastRunning: ["side": apiSide, "durationSec": duration],
+                        control: .timed(side)
                     )
                 }
             }
@@ -375,7 +416,8 @@ final class BabyHomeStatusModel {
     private func sendQuickCare(
         action: [String: Any],
         breastRunning: [String: Any]? = nil,
-        clientRequestId: String? = nil
+        clientRequestId: String? = nil,
+        control: CareFailedControl? = nil
     ) async {
         guard mode == .live, let client = graphQLClient else { return }
         let id = clientRequestId ?? BabyClientRequestId.make()
@@ -393,8 +435,12 @@ final class BabyHomeStatusModel {
                 document: BabyGraphQLDocuments.quickCare,
                 variablesJSON: vars
             )
+            lastFailedControl = nil
             await loadLiveStatus()
         } catch {
+            if let control {
+                lastFailedControl = control
+            }
             applyLiveFailure(error)
         }
     }

@@ -1,5 +1,12 @@
 import Foundation
 
+/// Which Connect host preset matches the URL field (or none for custom / empty).
+enum ConnectHostPreset: Equatable {
+    case local
+    case production
+    case none
+}
+
 /// User-editable Baby API origin + GraphQL path builder.
 enum BabyAPIConfig {
     static let baseURLDefaultsKey = "baby.api.baseURL"
@@ -18,6 +25,22 @@ enum BabyAPIConfig {
 
     /// Production preset fills the pairing bootstrap origin (not empty paste field).
     static var productionPreset: String { productionPairingOrigin }
+
+    /// Map a URL field value to Local / Production / none. When both presets normalize equal, prefer `.local` (UI tap still sets `.production` explicitly).
+    static func resolveHostPreset(
+        for raw: String,
+        localPreset: String = localPreset,
+        productionPreset: String = productionPreset
+    ) -> ConnectHostPreset {
+        guard let origin = normalize(raw) else { return .none }
+        if let local = normalize(localPreset), local == origin {
+            return .local
+        }
+        if let production = normalize(productionPreset), production == origin {
+            return .production
+        }
+        return .none
+    }
     /// Strip whitespace and a single trailing `/`. Keep origin only (scheme + host + optional port).
     static func normalize(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -65,9 +88,17 @@ enum BabyAPIConfig {
     }
 }
 
+/// Whether Connect shows the editable API URL field (Production only; Local hides it).
+enum ConnectHostURLField {
+    static func isVisible(selected: ConnectHostPreset) -> Bool {
+        selected == .production
+    }
+}
+
 enum AuthGate {
     /// Connect screen when auth is not bypassed and user is not connected.
     static func showsConnect(bypassAuth: Bool, isConnected: Bool) -> Bool {
         !bypassAuth && !isConnected
     }
 }
+
