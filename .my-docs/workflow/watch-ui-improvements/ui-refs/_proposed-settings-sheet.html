@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Proposed — Settings sheet</title>
+  <style>
+    :root {
+      --bg: #FAFAFA;
+      --fg: #1A1A1A;
+      --muted: #6B6B6B;
+      --accent: #0D9488;
+      --surface: #FFFFFF;
+      --hairline: #E5E5E5;
+      --danger: #DC2626;
+      --radius: 8px;
+      --chip-h: 44px;
+      --secondary: 11px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #e8e8e8;
+      font-family: -apple-system, system-ui, sans-serif;
+    }
+    .watch {
+      width: 198px;
+      height: 242px;
+      padding: 10px 8px;
+      background: var(--bg);
+      color: var(--fg);
+      border-radius: 40px;
+      border: 8px solid #222;
+      position: relative;
+      overflow: hidden;
+    }
+    .dim {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+    }
+    .page-hint {
+      padding: 4px 4px 0;
+      opacity: 0.45;
+    }
+    .page-hint h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .sheet {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 10px;
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius);
+      padding: 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 2;
+    }
+    .sheet h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .host {
+      font-size: var(--secondary);
+      color: var(--muted);
+      word-break: break-all;
+    }
+    .btn {
+      height: var(--chip-h);
+      width: 100%;
+      border-radius: var(--radius);
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn.logout {
+      background: var(--surface);
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+    .btn.reconnect {
+      background: var(--accent);
+      color: #fff;
+      border: 1px solid var(--accent);
+    }
+    .gear {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      font-size: 14px;
+      z-index: 3;
+      color: var(--accent);
+    }
+    .caption {
+      position: absolute;
+      bottom: 12px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 12px;
+      color: #555;
+    }
+    .wrap { position: relative; padding-bottom: 28px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="watch" aria-label="Gear Settings sheet — host, Log out, Reconnect">
+      <div class="page-hint">
+        <h1>Feed</h1>
+      </div>
+      <span class="gear" aria-hidden="true">⚙</span>
+      <div class="dim" aria-hidden="true"></div>
+      <div class="sheet" role="dialog" aria-label="Settings">
+        <h2>Settings</h2>
+        <div class="host">Connected · example.com</div>
+        <button type="button" class="btn logout">Log out</button>
+        <button type="button" class="btn reconnect">Reconnect</button>
+      </div>
+    </div>
+    <p class="caption">Delta: no Settings page — gear sheet only (Option B)</p>
+  </div>
+</body>
+</html>

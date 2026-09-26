@@ -2,7 +2,7 @@ import SwiftUI
 
 struct BabyHomeView: View {
     @Bindable var model: BabyHomeStatusModel
-    var onOpenSettings: (() -> Void)?
+    var onOpenConnect: (() -> Void)?
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -27,20 +27,22 @@ struct BabyHomeView: View {
             pageSlot(.lastCare, selected: selected) {
                 LastCarePage(model: model)
             }
-            pageSlot(.settings, selected: selected) {
-                SettingsPage(model: model)
-            }
         }
         .tabViewStyle(.page)
         .background(p.background)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    onOpenSettings?()
+                    model.showSettingsSheet = true
                 } label: {
                     Image(systemName: "gearshape")
                 }
                 .accessibilityLabel("Settings")
+            }
+        }
+        .sheet(isPresented: $model.showSettingsSheet) {
+            SettingsSheet(model: model) {
+                onOpenConnect?()
             }
         }
         .task(id: model.mode) {

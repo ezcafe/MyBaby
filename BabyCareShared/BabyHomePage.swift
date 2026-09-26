@@ -6,7 +6,6 @@ enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
     case diaper
     case pump
     case lastCare
-    case settings
 
     var id: Int { rawValue }
 
@@ -22,7 +21,6 @@ enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
         case .diaper: return "diaper"
         case .pump: return "pump"
         case .lastCare: return "status"
-        case .settings: return "settings"
         }
     }
 
@@ -34,7 +32,6 @@ enum BabyHomePage: Int, CaseIterable, Identifiable, Hashable {
         case "diaper": return .diaper
         case "pump", "pump-amount", "pumpamount", "pump_amount": return .pump
         case "status", "lastcare", "last-care": return .lastCare
-        case "settings": return .settings
         default: return nil
         }
     }
@@ -44,17 +41,34 @@ enum BabyHomeDeepLink {
     static let scheme = "mybaby"
     static let host = "home"
 
-    /// Maps `mybaby://home?page=sleep` → page. Unknown → `.feed`.
+    /// Settings is a sheet (not a TabView page).
+    static func isSettingsQuery(_ value: String?) -> Bool {
+        value?.lowercased() == "settings"
+    }
+
+    /// Maps `mybaby://home?page=sleep` → page. Unknown → `.feed`. Settings query → `.feed` (caller should open sheet via `isSettingsLink`).
     static func page(from url: URL) -> BabyHomePage {
         guard url.scheme == scheme, url.host == host else {
             return .feed
         }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
         let page = items?.first(where: { $0.name == "page" })?.value
+        if isSettingsQuery(page) { return .feed }
         return BabyHomePage.fromQuery(page) ?? .feed
+    }
+
+    static func isSettingsLink(_ url: URL) -> Bool {
+        guard url.scheme == scheme, url.host == host else { return false }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+        let page = items?.first(where: { $0.name == "page" })?.value
+        return isSettingsQuery(page)
     }
 
     static func url(page: BabyHomePage) -> URL {
         URL(string: "\(scheme)://\(host)?page=\(page.queryValue)")!
+    }
+
+    static var settingsURL: URL {
+        URL(string: "\(scheme)://\(host)?page=settings")!
     }
 }

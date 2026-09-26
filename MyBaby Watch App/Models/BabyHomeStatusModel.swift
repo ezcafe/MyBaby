@@ -100,6 +100,9 @@ final class BabyHomeStatusModel {
     var pendingRecovery: String?
     var statusFail: String?
     var lastFailedControl: CareFailedControl?
+    /// Gear sheet (Settings Option B) — not a TabView page.
+    var showSettingsSheet: Bool = false
+    var isStatusLoading: Bool = false
 
     /// Latest done-flash clear work — cancelled when a newer flash schedules.
     private(set) var clearDoneTask: Task<Void, Never>?
@@ -109,6 +112,11 @@ final class BabyHomeStatusModel {
 
     /// Last quick-care id for retry tests / unknown failure.
     private(set) var lastClientRequestId: String?
+
+    /// Payload for footer Retry after a failed send.
+    private(set) var lastRetryAction: [String: Any]?
+    private(set) var lastRetryBreastRunning: [String: Any]?
+    private(set) var lastRetryClientRequestId: String?
 
     init(
         snapshot: BabyHomeStatusSnapshot = .sampleNextFeed(),
@@ -132,6 +140,7 @@ final class BabyHomeStatusModel {
         needsReconnect = false
         statusFail = nil
         lastFailedControl = nil
+        clearRetryPayload()
     }
 
     func useLive(client: any BabyGraphQLClienting) {
@@ -141,6 +150,7 @@ final class BabyHomeStatusModel {
         needsReconnect = false
         statusFail = nil
         lastFailedControl = nil
+        clearRetryPayload()
     }
 
     /// Clear Keychain token and leave care until user Connects again.
@@ -152,6 +162,8 @@ final class BabyHomeStatusModel {
         needsReconnect = false
         statusFail = nil
         lastFailedControl = nil
+        showSettingsSheet = false
+        clearRetryPayload()
     }
 
     func isFailed(_ control: CareFailedControl) -> Bool {
@@ -245,6 +257,8 @@ final class BabyHomeStatusModel {
 
     func loadLiveStatus() async {
         guard mode == .live, let client = graphQLClient else { return }
+        isStatusLoading = true
+        defer { isStatusLoading = false }
         let window = BabyLocalDayWindow.make()
         do {
             let vars = try JSONSerialization.data(withJSONObject: [
@@ -264,6 +278,7 @@ final class BabyHomeStatusModel {
             }
             statusFail = nil
             lastFailedControl = nil
+            clearRetryPayload()
             needsReconnect = false
         } catch {
             applyLiveFailure(error)
@@ -284,7 +299,40 @@ final class BabyHomeStatusModel {
     }
 
     func applyDeepLink(_ url: URL) {
+        if BabyHomeDeepLink.isSettingsLink(url) {
+            showSettingsSheet = true
+            return
+        }
         selectedPage = BabyHomeDeepLink.page(from: url)
+    }
+
+    /// Footer Retry: re-send last failed quick-care, or reload status when no chip fail.
+    func retryLastFailure() async {
+        if let action = lastRetryAction, let id = lastRetryClientRequestId {
+            await sendQuickCare(
+                action: action,
+                breastRunning: lastRetryBreastRunning,
+                clientRequestId: BabyClientRequestId.retrySame(id),
+                control: lastFailedControl
+            )
+            return
+        }
+        if statusFail != nil {
+            await loadLiveStatus()
+        }
+    }
+
+    func discardRecovery() {
+        pendingRecovery = nil
+        statusFail = nil
+        lastFailedControl = nil
+        clearRetryPayload()
+    }
+
+    private func clearRetryPayload() {
+        lastRetryAction = nil
+        lastRetryBreastRunning = nil
+        lastRetryClientRequestId = nil
     }
 
     private func handleBreastToggle(active: TimedChipSide) {
@@ -436,8 +484,12 @@ final class BabyHomeStatusModel {
                 variablesJSON: vars
             )
             lastFailedControl = nil
+            clearRetryPayload()
             await loadLiveStatus()
         } catch {
+            lastRetryAction = action
+            lastRetryBreastRunning = breastRunning
+            lastRetryClientRequestId = id
             if let control {
                 lastFailedControl = control
             }

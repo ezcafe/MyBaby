@@ -16,7 +16,11 @@ struct FeedPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                CareSectionHeader(lead: "Feed", detail: model.snapshot.feedHeaderDetail)
+                CareSectionHeader(
+                    lead: "Feed",
+                    detail: model.snapshot.feedHeaderDetail,
+                    isUpdating: model.isStatusLoading
+                )
                 HStack(spacing: 8) {
                     TimedCareChip(
                         side: .breastLeft,
@@ -45,7 +49,11 @@ struct FeedPage: View {
                     onSelect: { model.selectBottle(ml: $0) },
                     onCustom: { showCustomBottle = true }
                 )
-                CareFooterSlot(content: model.footer(tip: model.snapshot.feedTip))
+                CareFooterSlot(
+                    content: model.footer(tip: model.snapshot.feedTip),
+                    onRetry: { Task { await model.retryLastFailure() } },
+                    onDiscard: { model.discardRecovery() }
+                )
             }
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -74,7 +82,7 @@ struct SleepPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            CareSectionHeader(lead: "Sleep", detail: nil)
+            CareSectionHeader(lead: "Sleep", detail: nil, isUpdating: model.isStatusLoading)
             TimedCareChip(
                 side: .nap,
                 phase: model.nap,
@@ -83,7 +91,11 @@ struct SleepPage: View {
             ) {
                 model.toggleTimed(.nap)
             }
-            CareFooterSlot(content: model.footer(tip: model.snapshot.sleepTip))
+            CareFooterSlot(
+                content: model.footer(tip: model.snapshot.sleepTip),
+                onRetry: { Task { await model.retryLastFailure() } },
+                onDiscard: { model.discardRecovery() }
+            )
         }
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -95,7 +107,7 @@ struct DiaperPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            CareSectionHeader(lead: "Diaper", detail: nil)
+            CareSectionHeader(lead: "Diaper", detail: nil, isUpdating: model.isStatusLoading)
             DiaperKindGrid(
                 done: model.diaperDoneKind,
                 failed: {
@@ -104,7 +116,11 @@ struct DiaperPage: View {
                 }(),
                 onSelect: { model.selectDiaper($0) }
             )
-            CareFooterSlot(content: model.footer(tip: model.snapshot.diaperTip))
+            CareFooterSlot(
+                content: model.footer(tip: model.snapshot.diaperTip),
+                onRetry: { Task { await model.retryLastFailure() } },
+                onDiscard: { model.discardRecovery() }
+            )
         }
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -124,10 +140,21 @@ struct PumpPage: View {
         )
     }
 
+    /// Header uses last-pump status cue when present; tip stays in footer only.
+    private var pumpHeaderDetail: String? {
+        let line = model.snapshot.lastPump
+        if line.isEmpty { return nil }
+        return line.sentence
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                CareSectionHeader(lead: "Pump", detail: model.snapshot.pumpTip)
+                CareSectionHeader(
+                    lead: "Pump",
+                    detail: pumpHeaderDetail,
+                    isUpdating: model.isStatusLoading
+                )
                 VStack(spacing: 6) {
                     HStack(spacing: 6) {
                         TimedCareChip(
@@ -166,7 +193,11 @@ struct PumpPage: View {
                     onSelect: { model.selectPump(ml: $0) },
                     onCustom: { showCustom = true }
                 )
-                CareFooterSlot(content: model.footer(tip: model.snapshot.pumpTip))
+                CareFooterSlot(
+                    content: model.footer(tip: model.snapshot.pumpTip),
+                    onRetry: { Task { await model.retryLastFailure() } },
+                    onDiscard: { model.discardRecovery() }
+                )
             }
             .padding(.horizontal, 4)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -189,7 +220,11 @@ struct LastCarePage: View {
         let p = BabyPalette(scheme: scheme)
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                CareSectionHeader(lead: model.snapshot.lastCareHeaderLead, detail: nil)
+                CareSectionHeader(
+                    lead: model.snapshot.lastCareHeaderLead,
+                    detail: nil,
+                    isUpdating: model.isStatusLoading
+                )
                 statusRow(model.snapshot.lastFeed, palette: p)
                 statusRow(model.snapshot.lastNap, palette: p)
                 statusRow(model.snapshot.lastDiaper, palette: p)
@@ -211,16 +246,19 @@ struct LastCarePage: View {
             Text(line.sentence)
                 .font(.caption)
                 .foregroundStyle(line.isEmpty ? palette.muted : palette.foreground)
-                .lineLimit(1)
+                .lineLimit(2)
                 .minimumScaleFactor(0.85)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-struct SettingsPage: View {
+/// Gear sheet — host, Log out (caller confirms), Reconnect. Not a TabView page.
+struct SettingsSheet: View {
     @Bindable var model: BabyHomeStatusModel
+    var onReconnect: () -> Void
     @Environment(\.colorScheme) private var scheme
+    @State private var confirmLogout = false
 
     private var hostLine: String {
         let raw = BabyAPIConfig.loadBaseURL()
@@ -239,7 +277,7 @@ struct SettingsPage: View {
                 .foregroundStyle(p.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button("Log out") {
-                model.logout()
+                confirmLogout = true
             }
             .font(.headline.weight(.bold))
             .foregroundStyle(p.danger)
@@ -252,10 +290,29 @@ struct SettingsPage: View {
                     .stroke(p.danger, lineWidth: 1)
             )
             .buttonStyle(.plain)
+            Button("Reconnect") {
+                model.showSettingsSheet = false
+                onReconnect()
+            }
+            .font(.headline.weight(.bold))
+            .foregroundStyle(p.accentForeground)
+            .frame(maxWidth: .infinity)
+            .frame(height: BabyTokens.careChipHeight)
+            .background(p.accent)
+            .clipShape(RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous))
+            .buttonStyle(.plain)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .confirmationDialog("Log out?", isPresented: $confirmLogout, titleVisibility: .visible) {
+            Button("Log out", role: .destructive) {
+                model.logout()
+                model.showSettingsSheet = false
+                onReconnect()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 }
 

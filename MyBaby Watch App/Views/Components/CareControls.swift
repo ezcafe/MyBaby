@@ -1,9 +1,43 @@
 import SwiftUI
 
+/// Shared copy for care chips — keeps identity when a live send fails.
+enum CareControlLabels {
+    static func mlTitle(_ ml: Int) -> String { "\(ml) ml" }
+
+    static func failSubtitle(isFailed: Bool) -> String? {
+        isFailed ? "Failed" : nil
+    }
+
+    /// Timed chip title: never wipe identity on fail.
+    static func timedTitle(side: TimedChipSide, phase: TimedChipPhase, isFailed: Bool) -> String {
+        if isFailed { return side.title }
+        switch phase {
+        case .idle: return side.title
+        case .running: return side.runningTitle
+        case .done: return "Done"
+        }
+    }
+
+    static func timedSubtitle(
+        side: TimedChipSide,
+        phase: TimedChipPhase,
+        isFailed: Bool,
+        elapsed: String
+    ) -> String {
+        if isFailed { return "Failed" }
+        switch phase {
+        case .idle: return side.idleSubtitle
+        case .running: return elapsed
+        case .done: return " "
+        }
+    }
+}
+
 struct CareSectionHeader: View {
     @Environment(\.colorScheme) private var scheme
     let lead: String
     let detail: String?
+    var isUpdating: Bool = false
 
     var body: some View {
         let p = BabyPalette(scheme: scheme)
@@ -16,6 +50,12 @@ struct CareSectionHeader: View {
                     .font(BabyTokens.secondaryFont)
                     .foregroundStyle(p.muted)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if isUpdating {
+                Text("Updating…")
+                    .font(BabyTokens.secondaryFont)
+                    .foregroundStyle(p.muted)
+                    .accessibilityLabel("Updating")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -105,6 +145,7 @@ struct TimedCareChip: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(title), \(subtitle(now: .now))")
     }
 
     @ViewBuilder
@@ -161,27 +202,22 @@ struct TimedCareChip: View {
     }
 
     private var title: String {
-        if isFailed { return "Failed" }
-        switch phase {
-        case .idle:
-            return side.title
-        case .running:
-            return side.runningTitle
-        case .done:
-            return "Done"
-        }
+        CareControlLabels.timedTitle(side: side, phase: phase, isFailed: isFailed)
     }
 
     private func subtitle(now: Date) -> String {
-        if isFailed { return " " }
-        switch phase {
-        case .idle:
-            return side.idleSubtitle
-        case .running(let startedAt):
-            return BabyCarePrimarySignal.formatTimer(now.timeIntervalSince(startedAt))
-        case .done:
-            return " "
-        }
+        let elapsed: String = {
+            if case .running(let startedAt) = phase {
+                return BabyCarePrimarySignal.formatTimer(now.timeIntervalSince(startedAt))
+            }
+            return ""
+        }()
+        return CareControlLabels.timedSubtitle(
+            side: side,
+            phase: phase,
+            isFailed: isFailed,
+            elapsed: elapsed
+        )
     }
 }
 
@@ -205,19 +241,28 @@ struct CareMlAmountGrid: View {
                     Button {
                         onSelect(ml)
                     } label: {
-                        Text(failed ? "Failed" : "\(ml)")
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(failed ? p.danger : (on ? p.accentForeground : p.foreground))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: BabyTokens.careChipHeight)
-                            .background(failed ? p.dangerSurface : (on ? p.accent : p.surface))
-                            .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
-                                    .stroke(failed ? p.danger : p.hairline, lineWidth: 1)
-                            )
+                        VStack(spacing: 1) {
+                            Text(CareControlLabels.mlTitle(ml))
+                                .font(.headline.weight(.bold))
+                            if let fail = CareControlLabels.failSubtitle(isFailed: failed) {
+                                Text(fail)
+                                    .font(BabyTokens.secondaryFont)
+                            }
+                        }
+                        .foregroundStyle(failed ? p.danger : (on ? p.accentForeground : p.foreground))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: BabyTokens.careChipHeight)
+                        .background(failed ? p.dangerSurface : (on ? p.accent : p.surface))
+                        .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
+                                .stroke(failed ? p.danger : p.hairline, lineWidth: 1)
+                        )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(failed
+                        ? "Bottle \(ml) milliliters, Failed"
+                        : "Bottle \(ml) milliliters")
                 }
             }
             Button("Custom", action: onCustom)
@@ -232,15 +277,14 @@ struct CareMlAmountGrid: View {
                         .stroke(p.hairline, lineWidth: 1)
                 )
                 .buttonStyle(.plain)
+                .accessibilityLabel("Custom bottle amount")
         }
     }
 }
 
 struct DiaperKindGrid: View {
     static let iconTitleSpacing: CGFloat = 0
-    /// Smaller than caption so icon + label fit the tile.
-    static let titleFontSize: CGFloat = 10
-    static var titleFont: Font { .system(size: titleFontSize, weight: .semibold) }
+    static var titleFont: Font { .caption2.weight(.semibold) }
     static var chipHeight: CGFloat { BabyTokens.careChipHeight }
 
     @Environment(\.colorScheme) private var scheme
@@ -265,8 +309,12 @@ struct DiaperKindGrid: View {
                     VStack(spacing: Self.iconTitleSpacing) {
                         Image(systemName: kind.systemImage)
                             .font(.caption.weight(.semibold))
-                        Text(isFail ? "Failed" : kind.rawValue)
+                        Text(kind.rawValue)
                             .font(Self.titleFont)
+                        if CareControlLabels.failSubtitle(isFailed: isFail) != nil {
+                            Text("Failed")
+                                .font(BabyTokens.secondaryFont)
+                        }
                     }
                     .foregroundStyle(isFail ? p.danger : (on ? p.accentForeground : p.foreground))
                     .frame(maxWidth: .infinity)
@@ -279,6 +327,7 @@ struct DiaperKindGrid: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isFail ? "\(kind.rawValue) diaper, Failed" : "\(kind.rawValue) diaper")
             }
         }
     }

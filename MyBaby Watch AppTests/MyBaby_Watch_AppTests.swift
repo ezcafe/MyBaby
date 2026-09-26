@@ -107,14 +107,14 @@ struct BabyHomeStatusTests {
         #expect(BabyCarePrimarySignal.deepLinkPage(for: feedKind) == .feed)
     }
 
-    @Test func pageOrderIsFeedSleepDiaperPumpLastCareSettings() {
-        #expect(BabyHomePage.allCases.map(\.rawValue) == [0, 1, 2, 3, 4, 5])
+    @Test func pageOrderIsFeedSleepDiaperPumpLastCare() {
+        #expect(BabyHomePage.allCases.map(\.rawValue) == [0, 1, 2, 3, 4])
         #expect(BabyHomePage.feed.queryValue == "feed")
         #expect(BabyHomePage.sleep.queryValue == "sleep")
         #expect(BabyHomePage.diaper.queryValue == "diaper")
         #expect(BabyHomePage.pump.queryValue == "pump")
         #expect(BabyHomePage.lastCare.queryValue == "status")
-        #expect(BabyHomePage.settings.queryValue == "settings")
+        #expect(BabyHomePage.fromQuery("settings") == nil)
     }
 
     @Test func pageMountKeepsSelectedAndNeighborsOnly() {
@@ -128,11 +128,8 @@ struct BabyHomeStatusTests {
         #expect(!BabyHomePage.shouldMount(.lastCare, selected: .diaper))
         #expect(BabyHomePage.shouldMount(.pump, selected: .lastCare))
         #expect(BabyHomePage.shouldMount(.lastCare, selected: .lastCare))
-        #expect(BabyHomePage.shouldMount(.settings, selected: .lastCare))
         #expect(!BabyHomePage.shouldMount(.diaper, selected: .lastCare))
-        #expect(BabyHomePage.shouldMount(.lastCare, selected: .settings))
-        #expect(BabyHomePage.shouldMount(.settings, selected: .settings))
-        #expect(!BabyHomePage.shouldMount(.pump, selected: .settings))
+        #expect(!BabyHomePage.shouldMount(.feed, selected: .lastCare))
     }
 
     @Test func deepLinkPumpAmountMapsToPump() {
@@ -431,7 +428,6 @@ struct BabyHomeStatusTests {
 
     @Test func diaperIconTitleSpacingIsTight() {
         #expect(DiaperKindGrid.iconTitleSpacing == 0)
-        #expect(DiaperKindGrid.titleFontSize == 10)
         #expect(DiaperKindGrid.chipHeight == BabyTokens.careChipHeight)
     }
 
@@ -752,18 +748,81 @@ struct BabyLiveModelTests {
         #expect(model.lastFailedControl == .bottle(ml: 90))
         #expect(model.statusFail?.isEmpty == false)
         #expect(model.isFailed(.bottle(ml: 90)))
+        #expect(model.lastRetryClientRequestId != nil)
+        #expect(model.lastRetryAction != nil)
+    }
+
+    @Test @MainActor func retryLastFailureResendsSameClientRequestId() async {
+        let stub = StubGraphQLClient()
+        stub.error = BabyGraphQLError.transport
+        let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
+        model.selectBottle(ml: 90)
+        try? await Task.sleep(for: .milliseconds(80))
+        let id = model.lastRetryClientRequestId
+        #expect(id != nil)
+        stub.error = nil
+        await model.retryLastFailure()
+        try? await Task.sleep(for: .milliseconds(80))
+        let careCalls = stub.calls.filter { $0.document.contains("babyQuickCare") }
+        #expect(careCalls.count >= 2)
+        let bodies = careCalls.compactMap { $0.variablesJSON.flatMap { String(data: $0, encoding: .utf8) } }
+        #expect(bodies.filter { $0.contains(id!) }.count >= 2)
+        #expect(model.lastFailedControl == nil)
+    }
+
+    @Test @MainActor func statusFailRetryReloadsStatus() async {
+        let stub = StubGraphQLClient()
+        stub.error = BabyGraphQLError.transport
+        let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
+        await model.loadLiveStatus()
+        #expect(model.statusFail != nil)
+        #expect(model.lastFailedControl == nil)
+        stub.error = nil
+        let before = stub.calls.count
+        await model.retryLastFailure()
+        #expect(stub.calls.count > before)
+        #expect(model.statusFail == nil)
+    }
+
+    @Test @MainActor func isStatusLoadingTogglesAroundLoad() async {
+        let stub = StubGraphQLClient()
+        let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
+        #expect(!model.isStatusLoading)
+        await model.loadLiveStatus()
+        #expect(!model.isStatusLoading)
+    }
+
+    @Test @MainActor func deepLinkSettingsOpensSheet() {
+        let model = BabyHomeStatusModel()
+        model.applyDeepLink(BabyHomeDeepLink.settingsURL)
+        #expect(model.showSettingsSheet)
+        #expect(model.selectedPage == .feed)
     }
 
     @Test @MainActor func logoutClearsTokenAndDisconnects() {
         let store = InMemoryBabyAPITokenStore()
         try? store.save("mny_test_token")
         let model = BabyHomeStatusModel(isConnected: true, mode: .live, graphQLClient: StubGraphQLClient())
+        model.showSettingsSheet = true
         model.logout(tokenStore: store)
         #expect(store.load() == nil)
         #expect(!model.isConnected)
         #expect(model.graphQLClient == nil)
         #expect(model.lastFailedControl == nil)
+        #expect(!model.showSettingsSheet)
         #expect(AuthGate.showsConnect(bypassAuth: false, isConnected: model.isConnected))
+    }
+
+    @Test func failChipCopyKeepsIdentity() {
+        #expect(CareControlLabels.mlTitle(90) == "90 ml")
+        #expect(CareControlLabels.failSubtitle(isFailed: true) == "Failed")
+        #expect(
+            CareControlLabels.timedTitle(side: .breastLeft, phase: .idle, isFailed: true) == "Left"
+        )
+        #expect(
+            CareControlLabels.timedSubtitle(side: .breastLeft, phase: .idle, isFailed: true, elapsed: "")
+                == "Failed"
+        )
     }
 
     @Test func connectGuideCopyIsPresent() {

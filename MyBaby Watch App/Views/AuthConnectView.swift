@@ -62,7 +62,7 @@ struct AuthConnectView: View {
                 if let errorText {
                     Text(errorText)
                         .font(.caption2)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(p.danger)
                         .multilineTextAlignment(.center)
                 }
 
@@ -93,7 +93,7 @@ struct AuthConnectView: View {
                         .foregroundStyle(p.foreground)
                     ForEach(Array(ConnectGuideCopy.steps.enumerated()), id: \.offset) { index, step in
                         Text("\(index + 1). \(step)")
-                            .font(.system(size: 10))
+                            .font(BabyTokens.secondaryFont)
                             .foregroundStyle(p.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -135,7 +135,7 @@ struct AuthConnectView: View {
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(on ? palette.accentForeground : palette.foreground)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .frame(height: BabyTokens.careChipHeight)
                 .background(on ? palette.accent : palette.surface)
                 .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
                 .overlay(

@@ -13,7 +13,9 @@ struct ContentView: View {
                     showConnect = false
                 }
             } else {
-                BabyHomeView(model: model, onOpenSettings: { showConnect = true })
+                NavigationStack {
+                    BabyHomeView(model: model, onOpenConnect: { showConnect = true })
+                }
             }
         }
         .onOpenURL { url in
@@ -24,6 +26,9 @@ struct ContentView: View {
         }
         .onChange(of: model.needsReconnect) { _, needs in
             if needs { showConnect = true }
+        }
+        .onChange(of: model.isConnected) { _, connected in
+            if !connected { showConnect = true }
         }
     }
 }

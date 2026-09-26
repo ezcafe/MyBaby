@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Proposed — Feed fail + Retry</title>
+  <style>
+    :root {
+      --bg: #FAFAFA;
+      --fg: #1A1A1A;
+      --muted: #6B6B6B;
+      --accent: #0D9488;
+      --surface: #FFFFFF;
+      --hairline: #E5E5E5;
+      --danger: #DC2626;
+      --danger-surface: #FEF2F2;
+      --radius: 8px;
+      --radius-sm: 6px;
+      --chip-h: 44px;
+      --secondary: 11px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #e8e8e8;
+      font-family: -apple-system, system-ui, sans-serif;
+    }
+    .watch {
+      width: 198px;
+      height: 242px;
+      padding: 10px 8px 8px;
+      background: var(--bg);
+      color: var(--fg);
+      border-radius: 40px;
+      border: 8px solid #222;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .header p {
+      margin: 2px 0 0;
+      font-size: var(--secondary);
+      color: var(--muted);
+    }
+    .updating {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .row { display: flex; gap: 6px; }
+    .chip {
+      flex: 1;
+      min-height: var(--chip-h);
+      padding: 8px;
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius);
+    }
+    .chip .t { font-size: 13px; font-weight: 700; }
+    .chip .s { font-size: var(--secondary); color: var(--muted); margin-top: 2px; }
+    .chip.fail {
+      border-color: var(--danger);
+      background: var(--danger-surface);
+    }
+    .chip.fail .t,
+    .chip.fail .s { color: var(--danger); }
+    .ml {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+    }
+    .ml button {
+      height: var(--chip-h);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--fg);
+    }
+    .ml button.fail {
+      border-color: var(--danger);
+      color: var(--danger);
+      background: var(--danger-surface);
+    }
+    .ml button .sub {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      margin-top: 1px;
+    }
+    .custom {
+      height: var(--chip-h);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      font-weight: 700;
+      width: 100%;
+      font-size: 13px;
+    }
+    .footer {
+      font-size: var(--secondary);
+      color: var(--muted);
+      margin-top: auto;
+    }
+    .footer .retry {
+      margin-top: 6px;
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 12px;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+    .caption {
+      position: absolute;
+      bottom: 12px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 12px;
+      color: #555;
+    }
+    .wrap { position: relative; padding-bottom: 28px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="watch" aria-label="Feed page — bottle chip failed with Retry">
+      <div class="header">
+        <h1>Feed</h1>
+        <p>Next feed in about 2h</p>
+        <div class="updating" aria-live="polite">Updating…</div>
+      </div>
+      <div class="row">
+        <div class="chip"><div class="t">Left</div><div class="s">Tap to start</div></div>
+        <div class="chip"><div class="t">Right</div><div class="s">Tap to start</div></div>
+      </div>
+      <div class="ml">
+        <button type="button">90 ml</button>
+        <button type="button" class="fail" title="Send failed">90 ml<span class="sub">Failed</span></button>
+        <button type="button">120 ml</button>
+      </div>
+      <button type="button" class="custom">Custom</button>
+      <div class="footer">
+        <div>Network error — retry</div>
+        <button type="button" class="retry">Retry</button>
+      </div>
+    </div>
+    <p class="caption">Delta: identity + Failed subtitle + footer Retry + Updating</p>
+  </div>
+</body>
+</html>

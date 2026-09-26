@@ -44,8 +44,8 @@ enum BabyTokens {
     /// Shared row height for ml chips, Custom, and Diaper tiles.
     static let careChipHeight: CGFloat = minHit
 
-    /// Tips, section detail, idle “Tap to start” — quieter than caption2.
-    static let secondaryFont: Font = .system(size: 11, weight: .regular)
+    /// Tips, section detail, idle “Tap to start” — system caption2 floor (Watch readability).
+    static let secondaryFont: Font = .caption2
 }
 
 struct BabyPalette {
