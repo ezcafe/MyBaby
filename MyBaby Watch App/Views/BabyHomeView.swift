@@ -6,10 +6,8 @@ struct BabyHomeView: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        let p = BabyPalette(scheme: scheme)
         let selected = model.selectedPage
         // Do not wrap TabView in TimelineView — 1s rebuilds cancel in-flight gestures.
-        // No navigationTitle — Gate A2 removed app title chrome.
         // Mount only selected ±1 neighbor so far pages do not stay resident.
         TabView(selection: $model.selectedPage) {
             pageSlot(.feed, selected: selected) {
@@ -28,16 +26,22 @@ struct BabyHomeView: View {
                 LastCarePage(model: model)
             }
         }
-        .tabViewStyle(.page)
-        .background(p.background)
+        .tabViewStyle(.verticalPage)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    model.showSettingsSheet = true
-                } label: {
-                    Image(systemName: "gearshape")
+            ToolbarItem(placement: .topBarLeading) {
+                if model.isStatusLoading {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .accessibilityLabel("Updating")
                 }
-                .accessibilityLabel("Settings")
+            }
+            ToolbarItem(placement: .bottomBar) {
+                if model.lastFailedControl != nil || model.statusFail != nil {
+                    Button("Retry") {
+                        Task { await model.retryLastFailure() }
+                    }
+                    .tint(BabyTokens.accent(scheme))
+                }
             }
         }
         .sheet(isPresented: $model.showSettingsSheet) {
@@ -48,6 +52,8 @@ struct BabyHomeView: View {
         .task(id: model.mode) {
             if model.mode == .live {
                 await model.loadLiveStatus()
+            } else {
+                model.persistStatusForWidgets()
             }
         }
     }
@@ -58,9 +64,13 @@ struct BabyHomeView: View {
         selected: BabyHomePage,
         @ViewBuilder content: () -> Content
     ) -> some View {
+        let bg = CarePageBackground.kind(page: page, snapshot: model.snapshot)
         Group {
             if BabyHomePage.shouldMount(page, selected: selected) {
                 content()
+                    .containerBackground(for: .tabView) {
+                        CarePageBackgroundFill.containerFill(bg, scheme: scheme)
+                    }
             } else {
                 Color.clear
                     .accessibilityHidden(true)

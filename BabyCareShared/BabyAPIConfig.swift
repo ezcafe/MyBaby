@@ -102,3 +102,21 @@ enum AuthGate {
     }
 }
 
+/// Cold-start restore from Keychain token + saved base URL (no Connect re-entry).
+enum BabySessionRestore {
+    static func shouldRestoreLive(hasToken: Bool, hasBaseURL: Bool, isConnected: Bool) -> Bool {
+        !isConnected && hasToken && hasBaseURL
+    }
+
+    /// Live client when both credentials exist; otherwise nil (show Connect).
+    static func makeLiveClientIfPossible(
+        tokenStore: any BabyAPITokenStoring = BabyAPITokenStore(),
+        defaults: UserDefaults = .standard
+    ) -> BabyGraphQLClient? {
+        guard let token = tokenStore.load(), !token.isEmpty else { return nil }
+        let origin = BabyAPIConfig.loadBaseURL(defaults: defaults)
+        guard !origin.isEmpty else { return nil }
+        return BabyGraphQLClient(baseURLRaw: origin, token: token)
+    }
+}
+

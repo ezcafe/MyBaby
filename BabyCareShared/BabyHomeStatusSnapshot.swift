@@ -178,4 +178,52 @@ enum BabyCarePrimarySignal {
         let m = max(0, Int(interval / 60))
         return "\(m)m"
     }
+
+    /// Last care / complication hero kind label (short).
+    static func heroKindLabel(_ kind: BabyCarePrimaryKind) -> String {
+        switch kind {
+        case .openNap: return "Nap"
+        case .overdueFeed: return "Feed overdue"
+        case .overdueDiaper: return "Diaper overdue"
+        case .nextFeed: return "Next feed"
+        case .lastCare: return "Last care"
+        }
+    }
+
+    /// Large value for Last care hero / rectangular primary.
+    static func heroValue(_ kind: BabyCarePrimaryKind) -> String {
+        switch kind {
+        case .openNap(let elapsed):
+            return formatTimer(elapsed)
+        case .overdueFeed(let d), .overdueDiaper(let d), .nextFeed(let d):
+            return formatMinutes(d)
+        case .lastCare(let summary):
+            return summary
+        }
+    }
+
+    /// One secondary line under rectangular primary (not the same as primary).
+    static func secondaryLine(
+        snapshot: BabyHomeStatusSnapshot,
+        primary: BabyCarePrimaryKind,
+        now: Date = .now
+    ) -> String {
+        switch primary {
+        case .openNap:
+            if let next = snapshot.nextFeedInSeconds, next >= 0 {
+                return "Next feed \(formatMinutes(next))"
+            }
+            return snapshot.lastFeed.isEmpty ? "No feed yet" : snapshot.lastFeed.sentence
+        case .overdueFeed, .nextFeed:
+            if snapshot.openNapStartedAt != nil {
+                let elapsed = max(0, now.timeIntervalSince(snapshot.openNapStartedAt!))
+                return "Nap \(formatTimer(elapsed))"
+            }
+            return snapshot.lastNap.isEmpty ? snapshot.lastDiaper.sentence : snapshot.lastNap.sentence
+        case .overdueDiaper:
+            return snapshot.lastFeed.isEmpty ? "Check feed" : snapshot.lastFeed.sentence
+        case .lastCare:
+            return snapshot.lastNap.isEmpty ? snapshot.lastDiaper.sentence : snapshot.lastNap.sentence
+        }
+    }
 }

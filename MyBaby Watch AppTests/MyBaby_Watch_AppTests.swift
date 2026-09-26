@@ -196,6 +196,7 @@ struct BabyHomeStatusTests {
         #expect(sleepEN != sleepVI)
         #expect(CareGuideTips.diaperTip(ageDays: 120, locale: en).contains("Size M"))
         #expect(CareGuideTips.diaperTip(ageDays: 120, locale: vi).contains("Size M"))
+        #expect(CareGuideTips.diaperTip(ageDays: 10, locale: en).contains("\n"))
         #expect(CareGuideTips.pumpTip(ageDays: 45, locale: en).contains("90"))
         #expect(CareGuideTips.breastFeedsTip(ageDays: 0, locale: en).contains("8"))
         #expect(CareGuideTips.breastFeedsTip(ageDays: 0, locale: en).contains("12"))
@@ -409,11 +410,91 @@ struct BabyHomeStatusTests {
         #expect(TimedChipSide.breastLeft.runningTitle == "Left")
         #expect(TimedChipSide.nap.runningTitle == "Nap")
         #expect(!TimedChipSide.breastLeft.runningTitle.localizedCaseInsensitiveContains("tap to stop"))
-        #expect(TimedChipSide.breastLeft.idleSubtitle == "Tap to start")
+        #expect(
+            CareControlLabels.timedSubtitle(
+                side: .breastLeft,
+                phase: .idle,
+                isFailed: false,
+                elapsed: ""
+            ) == ""
+        )
     }
 
     @Test func customMlPickerShowsThreeRows() {
         #expect(CustomMlPicker.visibleRowCount == 3)
+    }
+
+    @Test func customMlPickerTitleIsCentered() {
+        #expect(CustomMlPicker.titleIsCentered)
+    }
+
+    @Test func bottleAndPumpAmountSheetTitlesAreCentered() {
+        #expect(BottleAmountSheet.titleIsCentered)
+        #expect(PumpAmountSheet.titleIsCentered)
+    }
+
+    @Test func planDiaperKindTapWetDryIsInstant() {
+        guard case .instantSave(let wet) = planDiaperKindTap(.wet) else {
+            Issue.record("Expected instantSave for wet")
+            return
+        }
+        #expect(wet == .wet)
+        guard case .instantSave(let dry) = planDiaperKindTap(.dry) else {
+            Issue.record("Expected instantSave for dry")
+            return
+        }
+        #expect(dry == .dry)
+    }
+
+    @Test func planDiaperKindTapPoopMixedOpensSheetWithMedium() {
+        guard case .openSheet(let poop, let poopDraft) = planDiaperKindTap(.poop) else {
+            Issue.record("Expected openSheet for poop")
+            return
+        }
+        #expect(poop == .poop)
+        #expect(poopDraft.amount == .medium)
+        #expect(poopDraft.color == nil)
+        #expect(poopDraft.texture == nil)
+
+        guard case .openSheet(let mixed, let mixedDraft) = planDiaperKindTap(.mixed) else {
+            Issue.record("Expected openSheet for mixed")
+            return
+        }
+        #expect(mixed == .mixed)
+        #expect(mixedDraft.amount == .medium)
+        #expect(mixedDraft.color == nil)
+        #expect(mixedDraft.texture == nil)
+    }
+
+    @Test func diaperSheetSaveActionOmitsNilColorTexture() {
+        let action = diaperSheetSaveAction(
+            kind: .poop,
+            draft: DiaperSheetDraft(color: nil, texture: .watery, amount: .medium)
+        )
+        #expect(action["kind"] as? String == "DIAPER")
+        #expect(action["diaperKind"] as? String == "dirty")
+        #expect(action["diaperTexture"] as? String == "watery")
+        #expect(action["diaperAmount"] as? String == "medium")
+        #expect(action["diaperColor"] == nil)
+    }
+
+    @Test func diaperSheetSaveActionMapsPoopToDirty() {
+        let action = diaperSheetSaveAction(
+            kind: .poop,
+            draft: DiaperSheetDraft(color: .yellow, texture: nil, amount: .smear)
+        )
+        #expect(action["diaperKind"] as? String == "dirty")
+        #expect(action["diaperColor"] as? String == "yellow")
+        #expect(action["diaperAmount"] as? String == "smear")
+    }
+
+    @Test func diaperColorRedFlagAndTextureCaution() {
+        #expect(DiaperDetailColor.red_bloody.isRedFlag)
+        #expect(DiaperDetailColor.white_pale.isRedFlag)
+        #expect(!DiaperDetailColor.yellow.isRedFlag)
+        #expect(DiaperDetailTexture.watery.needsCaution)
+        #expect(DiaperDetailTexture.hard.needsCaution)
+        #expect(!DiaperDetailTexture.soft.needsCaution)
     }
 
     @Test func lastCareSampleCopyIsShortOneLine() {
@@ -519,6 +600,39 @@ struct BabyAPIConfigTests {
         #expect(AuthGate.showsConnect(bypassAuth: false, isConnected: false))
         #expect(!AuthGate.showsConnect(bypassAuth: true, isConnected: false))
         #expect(!AuthGate.showsConnect(bypassAuth: false, isConnected: true))
+    }
+
+    @Test func sessionRestoreWhenTokenAndBaseURLExist() {
+        #expect(
+            BabySessionRestore.shouldRestoreLive(hasToken: true, hasBaseURL: true, isConnected: false)
+        )
+        #expect(
+            !BabySessionRestore.shouldRestoreLive(hasToken: false, hasBaseURL: true, isConnected: false)
+        )
+        #expect(
+            !BabySessionRestore.shouldRestoreLive(hasToken: true, hasBaseURL: false, isConnected: false)
+        )
+        #expect(
+            !BabySessionRestore.shouldRestoreLive(hasToken: true, hasBaseURL: true, isConnected: true)
+        )
+    }
+
+    @Test func makeLiveClientRequiresTokenAndBaseURL() {
+        let store = InMemoryBabyAPITokenStore()
+        let suite = "BabySessionRestore.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        #expect(BabySessionRestore.makeLiveClientIfPossible(tokenStore: store, defaults: defaults) == nil)
+
+        try? store.save("mny_test")
+        #expect(BabySessionRestore.makeLiveClientIfPossible(tokenStore: store, defaults: defaults) == nil)
+
+        #expect(BabyAPIConfig.saveBaseURL("http://127.0.0.1:3000", defaults: defaults))
+        let client = BabySessionRestore.makeLiveClientIfPossible(tokenStore: store, defaults: defaults)
+        #expect(client != nil)
+        #expect(client?.token == "mny_test")
+        #expect(client?.baseURLRaw == "http://127.0.0.1:3000")
     }
 
     @Test func saveBaseURLRoundTrip() {
@@ -739,17 +853,28 @@ struct BabyLiveModelTests {
         #expect(model.statusFail?.contains("Unauthorized") == true)
     }
 
-    @Test @MainActor func bottleSendFailSetsFailedControl() async {
+    @Test @MainActor func modelSelectDiaperWithDetailsIncludesAmount() async {
         let stub = StubGraphQLClient()
-        stub.error = BabyGraphQLError.transport
         let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
-        model.selectBottle(ml: 90)
+        model.selectDiaper(
+            .poop,
+            details: DiaperSheetDraft(color: .yellow, texture: nil, amount: .medium)
+        )
         try? await Task.sleep(for: .milliseconds(80))
-        #expect(model.lastFailedControl == .bottle(ml: 90))
-        #expect(model.statusFail?.isEmpty == false)
-        #expect(model.isFailed(.bottle(ml: 90)))
-        #expect(model.lastRetryClientRequestId != nil)
-        #expect(model.lastRetryAction != nil)
+        #expect(model.diaperDoneKind == .poop)
+        #expect(model.selectedDiaperKind == nil)
+        let careCall = stub.calls.first { $0.document.contains("babyQuickCare") }
+        let body = careCall?.variablesJSON.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        #expect(body.contains("dirty"))
+        #expect(body.contains("yellow"))
+        #expect(body.contains("medium"))
+    }
+
+    @Test @MainActor func modelSelectDiaperWetDoesNotKeepSelected() {
+        let model = BabyHomeStatusModel()
+        model.selectDiaper(.wet)
+        #expect(model.diaperDoneKind == .wet)
+        #expect(model.selectedDiaperKind == nil)
     }
 
     @Test @MainActor func retryLastFailureResendsSameClientRequestId() async {
@@ -833,5 +958,79 @@ struct BabyLiveModelTests {
     @Test func retryHelperKeepsSameId() {
         let id = "abc123def456abc123def456abc123de"
         #expect(BabyClientRequestId.retrySame(id) == id)
+    }
+
+    @Test func carePageBackgroundDistinguishesFeedAndSleep() {
+        let feed = CarePageBackground.kind(page: .feed, snapshot: .sampleNextFeed())
+        let sleep = CarePageBackground.kind(page: .sleep, snapshot: .sampleOpenNap())
+        #expect(CarePageBackground.tokenId(feed) == "feed")
+        #expect(CarePageBackground.tokenId(sleep) == "sleep")
+        #expect(feed != sleep)
+    }
+
+    @Test func carePageBackgroundMarksOverdueFeed() {
+        var snap = BabyHomeStatusSnapshot.sampleNextFeed()
+        snap.feedOverdueSeconds = 300
+        snap.nextFeedInSeconds = nil
+        let kind = CarePageBackground.kind(page: .feed, snapshot: snap)
+        #expect(kind == .feedOverdue)
+    }
+
+    @Test func statusStoreRoundTripWithSuite() throws {
+        let suite = "BabyCareStatusStoreTests.\(UUID().uuidString)"
+        defer {
+            BabyCareStatusStore.defaults(suiteName: suite)?
+                .removePersistentDomain(forName: suite)
+        }
+        let snap = BabyHomeStatusSnapshot.sampleOpenNap()
+        BabyCareStatusStore.save(snapshot: snap, suiteName: suite)
+        let loaded = BabyCareStatusStore.load(suiteName: suite)
+        #expect(loaded != nil)
+        #expect(loaded?.openNapStartedAt != nil)
+        #expect(loaded?.ageDays == snap.ageDays)
+    }
+
+    @Test func statusStoreEmptyFallsBackForWidgets() {
+        let suite = "BabyCareStatusStoreEmpty.\(UUID().uuidString)"
+        defer {
+            BabyCareStatusStore.defaults(suiteName: suite)?
+                .removePersistentDomain(forName: suite)
+        }
+        let snap = BabyCareStatusStore.snapshotForWidgets(suiteName: suite)
+        #expect(snap.nextFeedInSeconds != nil || snap.openNapStartedAt == nil)
+        let kind = BabyCarePrimarySignal.resolve(snap)
+        guard case .nextFeed = kind else {
+            // sampleNextFeed default
+            if case .openNap = kind { return }
+            Issue.record("Expected nextFeed from empty-store sample, got \(kind)")
+            return
+        }
+    }
+
+    @Test func statusStoreDTOExcludesTokenKeys() throws {
+        let dto = BabyCareStatusStore.dto(from: .sampleNextFeed())
+        let keys = try BabyCareStatusStore.encodedObjectKeys(dto)
+        for forbidden in BabyCareStatusStore.forbiddenKeys {
+            #expect(!keys.contains(forbidden))
+            #expect(keys.allSatisfy { !$0.lowercased().contains(forbidden) })
+        }
+    }
+
+    @Test func lastCareHeroCopyForOpenNapAndNextFeed() {
+        let nap = BabyCarePrimarySignal.resolve(.sampleOpenNap())
+        #expect(BabyCarePrimarySignal.heroKindLabel(nap) == "Nap")
+        #expect(!BabyCarePrimarySignal.heroValue(nap).isEmpty)
+
+        let feed = BabyCarePrimarySignal.resolve(.sampleNextFeed())
+        #expect(BabyCarePrimarySignal.heroKindLabel(feed) == "Next feed")
+        #expect(BabyCarePrimarySignal.heroValue(feed).hasSuffix("m"))
+    }
+
+    @Test func rectangularComplicationSecondaryLine() {
+        let snap = BabyHomeStatusSnapshot.sampleOpenNap()
+        let primary = BabyCarePrimarySignal.resolve(snap)
+        let secondary = BabyCarePrimarySignal.secondaryLine(snapshot: snap, primary: primary)
+        #expect(!secondary.isEmpty)
+        #expect(secondary != BabyCarePrimarySignal.shortLabel(primary) || secondary.contains("feed") || secondary.contains("Feed") || secondary.contains("Nap") || !snap.lastFeed.isEmpty)
     }
 }

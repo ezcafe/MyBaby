@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Proposed — Feed vertical + Bottle</title>
+  <style>
+    :root {
+      --fg: #1A1A1A;
+      --muted: #6B6B6B;
+      --accent: #0D9488;
+      --accent-fg: #FFFFFF;
+      --surface: rgba(255,255,255,0.72);
+      --hairline: rgba(0,0,0,0.08);
+      --radius: 8px;
+      --radius-sm: 6px;
+      --chip-h: 44px;
+      --secondary: 11px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      gap: 24px;
+      background: #e8e8e8;
+      font-family: -apple-system, system-ui, sans-serif;
+      padding: 24px;
+    }
+    .label { font-size: 12px; color: #555; text-align: center; margin-bottom: 6px; }
+    .watch {
+      width: 198px;
+      height: 242px;
+      padding: 10px 8px 8px;
+      background: linear-gradient(180deg, #ccfbf1 0%, #fafafa 55%);
+      color: var(--fg);
+      border-radius: 40px;
+      border: 8px solid #222;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      min-height: 18px;
+    }
+    .gear { font-size: 14px; opacity: 0.7; }
+    .spin {
+      width: 10px; height: 10px;
+      border: 2px solid var(--muted);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: rot 0.8s linear infinite;
+    }
+    @keyframes rot { to { transform: rotate(360deg); } }
+    .page-dots {
+      position: absolute;
+      right: 2px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .page-dots i {
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.25);
+      display: block;
+    }
+    .page-dots i.on {
+      height: 10px;
+      border-radius: 2px;
+      background: var(--accent);
+    }
+    .lead {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .row { display: flex; gap: 6px; padding-right: 8px; }
+    .chip {
+      flex: 1;
+      min-height: var(--chip-h);
+      padding: 8px;
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius);
+      backdrop-filter: blur(8px);
+    }
+    .chip .t { font-size: 13px; font-weight: 700; }
+    .chip .s { font-size: var(--secondary); color: var(--muted); margin-top: 2px; }
+    .chip.accent {
+      background: var(--accent);
+      border-color: transparent;
+      color: var(--accent-fg);
+    }
+    .chip.accent .s { color: rgba(255,255,255,0.85); }
+    .bottle {
+      height: var(--chip-h);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--fg);
+      margin-right: 8px;
+      backdrop-filter: blur(8px);
+    }
+    .tip {
+      font-size: var(--secondary);
+      color: var(--muted);
+      margin-right: 8px;
+    }
+    .sheet-watch .panel {
+      margin-top: auto;
+      background: #fff;
+      border-radius: 12px 12px 28px 28px;
+      padding: 10px 8px 12px;
+      border: 1px solid var(--hairline);
+    }
+    .sheet-watch .panel h2 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      text-align: center;
+    }
+    .ml {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .ml button, .custom {
+      height: var(--chip-h);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--fg);
+    }
+    .custom { width: 100%; }
+  </style>
+</head>
+<body>
+  <div>
+    <div class="label">Feed · vertical page · teal place background</div>
+    <div class="watch">
+      <div class="toolbar">
+        <span class="spin" title="Updating"></span>
+        <span class="gear">⚙</span>
+      </div>
+      <p class="lead">Feed</p>
+      <div class="row">
+        <div class="chip"><div class="t">Left</div><div class="s">Tap to start</div></div>
+        <div class="chip accent"><div class="t">Right</div><div class="s">0:42</div></div>
+      </div>
+      <button class="bottle" type="button">Bottle</button>
+      <p class="tip">Ends an open nap when you log.</p>
+      <div class="page-dots" aria-hidden="true">
+        <i class="on"></i><i></i><i></i><i></i><i></i>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="label">Bottle sheet (secondary)</div>
+    <div class="watch sheet-watch" style="background: linear-gradient(180deg, #99f6e4 0%, #fafafa 70%);">
+      <p class="lead" style="opacity:0.4">Feed</p>
+      <div class="panel">
+        <h2>Bottle ml</h2>
+        <div class="ml">
+          <button type="button">90 ml</button>
+          <button type="button">120 ml</button>
+          <button type="button">150 ml</button>
+        </div>
+        <button class="custom" type="button">Custom</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

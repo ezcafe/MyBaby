@@ -9,12 +9,12 @@ struct BabyCareProvider: TimelineProvider {
     func getSnapshot(in context: Context, completion: @escaping (BabyCareEntry) -> Void) {
         let snap = context.isPreview
             ? BabyHomeStatusSnapshot.sampleOpenNap()
-            : BabyHomeStatusSnapshot.sampleNextFeed()
+            : BabyCareStatusStore.snapshotForWidgets()
         completion(BabyCareEntry(date: .now, snapshot: snap))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<BabyCareEntry>) -> Void) {
-        let snapshot = BabyHomeStatusSnapshot.sampleNextFeed()
+        let snapshot = BabyCareStatusStore.snapshotForWidgets()
         let entry = BabyCareEntry(date: .now, snapshot: snapshot)
         let refresh = BabyCareWidgetTimeline.nextUpdate(for: snapshot)
         completion(Timeline(entries: [entry], policy: .after(refresh)))
@@ -43,7 +43,7 @@ struct BabyCareWidgetEntryView: View {
                 Label(BabyCarePrimarySignal.shortLabel(signal), systemImage: icon(signal))
                     .font(.caption)
             case .accessoryRectangular:
-                medium
+                rectangular(signal)
             default:
                 circular(signal)
             }
@@ -64,26 +64,28 @@ struct BabyCareWidgetEntryView: View {
         }
     }
 
-    private var medium: some View {
+    private func rectangular(_ signal: BabyCarePrimaryKind) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Baby Care")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(Color(hex: 0x2DD4BF))
-            row(entry.snapshot.lastFeed)
-            row(entry.snapshot.lastNap)
-            row(entry.snapshot.lastDiaper)
+            Text(BabyCarePrimarySignal.shortLabel(signal))
+                .font(.caption.weight(.bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(
+                BabyCarePrimarySignal.secondaryLine(
+                    snapshot: entry.snapshot,
+                    primary: signal,
+                    now: entry.date
+                )
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    }
-
-    private func row(_ line: BabyCareStatusLine) -> some View {
-        HStack(alignment: .top, spacing: 4) {
-            Image(systemName: line.iconSystemName)
-                .foregroundStyle(Color(hex: 0x0D9488))
-            Text(line.sentence)
-                .font(.caption2)
-                .lineLimit(2)
-        }
     }
 
     private func icon(_ signal: BabyCarePrimaryKind) -> String {

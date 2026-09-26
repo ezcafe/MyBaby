@@ -18,8 +18,10 @@ struct AuthConnectView: View {
     @State private var baseURL: String = BabyAPIConfig.localPreset
     @State private var selectedPreset: ConnectHostPreset = .local
     @State private var pairingCode: String = ""
+    @State private var showHelp = false
     @State private var showAdvanced = false
-    @State private var token: String = BabyAPITokenStore().load() ?? ""
+    /// Do not preload Keychain into the field — cold start restores via BabySessionRestore.
+    @State private var token: String = ""
     @State private var errorText: String?
     @State private var connecting = false
 
@@ -72,40 +74,43 @@ struct AuthConnectView: View {
                 .tint(p.accent)
                 .disabled(connecting)
 
-                Button(showAdvanced ? "Hide advanced paste" : "Advanced: paste token") {
-                    showAdvanced.toggle()
+                Button(showHelp ? "Hide help" : "Need help?") {
+                    showHelp.toggle()
                 }
-                .font(.caption2)
+                .font(BabyTokens.secondaryFont)
+                .foregroundStyle(p.muted)
 
-                if showAdvanced {
-                    SecureField("mny_… token", text: $token)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Button("Save pasted credentials") {
-                        saveAdvancedPaste()
+                if showHelp {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(ConnectGuideCopy.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(p.foreground)
+                        ForEach(Array(ConnectGuideCopy.steps.enumerated()), id: \.offset) { index, step in
+                            Text("\(index + 1). \(step)")
+                                .font(BabyTokens.secondaryFont)
+                                .foregroundStyle(p.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Button(showAdvanced ? "Hide advanced paste" : "Advanced: paste token") {
+                            showAdvanced.toggle()
+                        }
+                        .font(.caption2)
+                        .padding(.top, 4)
+                        if showAdvanced {
+                            SecureField("mny_… token", text: $token)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                            Button("Save pasted credentials") {
+                                saveAdvancedPaste()
+                            }
+                            .font(.caption2)
+                        }
                     }
-                    .font(.caption2)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous))
                 }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(ConnectGuideCopy.title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(p.foreground)
-                    ForEach(Array(ConnectGuideCopy.steps.enumerated()), id: \.offset) { index, step in
-                        Text("\(index + 1). \(step)")
-                            .font(BabyTokens.secondaryFont)
-                            .foregroundStyle(p.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(p.surface)
-                .clipShape(RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous)
-                        .stroke(p.hairline, lineWidth: 1)
-                )
             }
             .padding()
         }
@@ -136,12 +141,11 @@ struct AuthConnectView: View {
                 .foregroundStyle(on ? palette.accentForeground : palette.foreground)
                 .frame(maxWidth: .infinity)
                 .frame(height: BabyTokens.careChipHeight)
-                .background(on ? palette.accent : palette.surface)
+                .background(on ? palette.accent : Color.clear)
+                .background {
+                    if !on { Rectangle().fill(.ultraThinMaterial) }
+                }
                 .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
-                        .stroke(palette.hairline, lineWidth: 1)
-                )
         }
         .buttonStyle(.plain)
     }
@@ -207,7 +211,7 @@ struct AuthConnectView: View {
         model.useLive(client: client)
         errorText = nil
         onDismiss?()
-        Task { await model.loadLiveStatus() }
+        // Status load is owned by BabyHomeView.task(id: mode) to avoid a double query.
     }
 
     private func watchPairUserMessage(_ err: WatchPairError) -> String {

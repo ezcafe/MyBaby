@@ -19,16 +19,16 @@ enum CareControlLabels {
     }
 
     static func timedSubtitle(
-        side: TimedChipSide,
+        side _: TimedChipSide,
         phase: TimedChipPhase,
         isFailed: Bool,
         elapsed: String
     ) -> String {
         if isFailed { return "Failed" }
         switch phase {
-        case .idle: return side.idleSubtitle
+        case .idle: return ""
         case .running: return elapsed
-        case .done: return " "
+        case .done: return ""
         }
     }
 }
@@ -77,6 +77,8 @@ struct CareFooterSlot: View {
             Text(message)
                 .font(BabyTokens.secondaryFont)
                 .foregroundStyle(p.muted)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         case .statusFail(let message):
             VStack(alignment: .leading, spacing: 6) {
@@ -116,11 +118,11 @@ struct TimedCareChip: View {
     var ticksEnabled: Bool = true
     let action: () -> Void
 
-    /// Pump L/R/Both match amount-chip height; Feed/Sleep keep roomier chrome.
+    /// Feed L/R and Pump L/R/Both share amount-chip height; Sleep stays roomier.
     private var isCompact: Bool {
         switch side {
-        case .pumpLeft, .pumpRight, .pumpBoth: return true
-        case .breastLeft, .breastRight, .nap: return false
+        case .breastLeft, .breastRight, .pumpLeft, .pumpRight, .pumpBoth: return true
+        case .nap: return false
         }
     }
 
@@ -145,20 +147,27 @@ struct TimedCareChip: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(subtitle(now: .now))")
+        .accessibilityLabel({
+            let sub = subtitle(now: .now)
+            return sub.isEmpty ? title : "\(title), \(sub)"
+        }())
     }
 
     @ViewBuilder
     private func chipLabel(now: Date, palette: BabyPalette) -> some View {
-        let label = VStack(alignment: .leading, spacing: isCompact ? 1 : 4) {
+        let sub = subtitle(now: now)
+        let label = VStack(spacing: isCompact ? 1 : 4) {
             Text(title)
                 .font(isCompact ? .caption.weight(.bold) : .headline.weight(.bold))
                 .foregroundStyle(titleColor(palette))
-            Text(subtitle(now: now))
-                .font(BabyTokens.secondaryFont)
-                .foregroundStyle(subtitleColor(palette))
+            if !sub.isEmpty {
+                Text(sub)
+                    .font(BabyTokens.secondaryFont)
+                    .foregroundStyle(subtitleColor(palette))
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         Group {
             if isCompact {
@@ -167,15 +176,15 @@ struct TimedCareChip: View {
                     .frame(height: BabyTokens.careChipHeight)
             } else {
                 label
-                    .frame(minHeight: BabyTokens.minHit, alignment: .leading)
+                    .frame(minHeight: BabyTokens.minHit)
                     .padding(10)
             }
         }
-        .background(chipBackground(palette))
+        .background(chipBackgroundView(palette))
         .clipShape(RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: BabyTokens.outerRadius, style: .continuous)
-                .stroke(isFailed ? palette.danger : palette.hairline, lineWidth: 1)
+                .stroke(isFailed ? palette.danger : Color.clear, lineWidth: isFailed ? 1 : 0)
         )
     }
 
@@ -189,9 +198,15 @@ struct TimedCareChip: View {
         return isAccent ? palette.accentForeground.opacity(0.85) : palette.muted
     }
 
-    private func chipBackground(_ palette: BabyPalette) -> Color {
-        if isFailed { return palette.dangerSurface }
-        return isAccent ? palette.accent : palette.surface
+    @ViewBuilder
+    private func chipBackgroundView(_ palette: BabyPalette) -> some View {
+        if isFailed {
+            palette.dangerSurface
+        } else if isAccent {
+            palette.accent
+        } else {
+            Rectangle().fill(.ultraThinMaterial)
+        }
     }
 
     private var isAccent: Bool {
@@ -221,7 +236,7 @@ struct TimedCareChip: View {
     }
 }
 
-/// 3 recommendation ml chips + full-width Custom on row 2. Accent = done flash only.
+/// 3 recommendation ml chips + Custom, stacked vertically. Accent = done flash only.
 struct CareMlAmountGrid: View {
     @Environment(\.colorScheme) private var scheme
     let mls: [Int]
@@ -234,48 +249,51 @@ struct CareMlAmountGrid: View {
         let p = BabyPalette(scheme: scheme)
         let chips = Array(mls.prefix(3))
         VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                ForEach(chips, id: \.self) { ml in
-                    let on = doneMl == ml && failedMl != ml
-                    let failed = failedMl == ml
-                    Button {
-                        onSelect(ml)
-                    } label: {
-                        VStack(spacing: 1) {
-                            Text(CareControlLabels.mlTitle(ml))
-                                .font(.headline.weight(.bold))
-                            if let fail = CareControlLabels.failSubtitle(isFailed: failed) {
-                                Text(fail)
-                                    .font(BabyTokens.secondaryFont)
-                            }
+            ForEach(chips, id: \.self) { ml in
+                let on = doneMl == ml && failedMl != ml
+                let failed = failedMl == ml
+                Button {
+                    onSelect(ml)
+                } label: {
+                    VStack(spacing: 1) {
+                        Text(CareControlLabels.mlTitle(ml))
+                            .font(.headline.weight(.bold))
+                        if let fail = CareControlLabels.failSubtitle(isFailed: failed) {
+                            Text(fail)
+                                .font(BabyTokens.secondaryFont)
                         }
-                        .foregroundStyle(failed ? p.danger : (on ? p.accentForeground : p.foreground))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: BabyTokens.careChipHeight)
-                        .background(failed ? p.dangerSurface : (on ? p.accent : p.surface))
-                        .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
-                                .stroke(failed ? p.danger : p.hairline, lineWidth: 1)
-                        )
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(failed
-                        ? "Bottle \(ml) milliliters, Failed"
-                        : "Bottle \(ml) milliliters")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(failed ? p.danger : (on ? p.accentForeground : p.foreground))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: BabyTokens.careChipHeight)
+                    .background {
+                        if failed {
+                            p.dangerSurface
+                        } else if on {
+                            p.accent
+                        } else {
+                            Rectangle().fill(.ultraThinMaterial)
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
+                            .stroke(failed ? p.danger : Color.clear, lineWidth: failed ? 1 : 0)
+                    )
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(failed
+                    ? "Bottle \(ml) milliliters, Failed"
+                    : "Bottle \(ml) milliliters")
             }
             Button("Custom", action: onCustom)
                 .font(.headline.weight(.bold))
                 .foregroundStyle(p.foreground)
                 .frame(maxWidth: .infinity)
                 .frame(height: BabyTokens.careChipHeight)
-                .background(p.surface)
+                .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
-                        .stroke(p.hairline, lineWidth: 1)
-                )
                 .buttonStyle(.plain)
                 .accessibilityLabel("Custom bottle amount")
         }
@@ -319,11 +337,19 @@ struct DiaperKindGrid: View {
                     .foregroundStyle(isFail ? p.danger : (on ? p.accentForeground : p.foreground))
                     .frame(maxWidth: .infinity)
                     .frame(height: Self.chipHeight)
-                    .background(isFail ? p.dangerSurface : (on ? p.accent : p.surface))
+                    .background {
+                        if isFail {
+                            p.dangerSurface
+                        } else if on {
+                            p.accent
+                        } else {
+                            Rectangle().fill(.ultraThinMaterial)
+                        }
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
-                            .stroke(isFail ? p.danger : p.hairline, lineWidth: 1)
+                            .stroke(isFail ? p.danger : Color.clear, lineWidth: isFail ? 1 : 0)
                     )
                 }
                 .buttonStyle(.plain)

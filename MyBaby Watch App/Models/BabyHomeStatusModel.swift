@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 enum TimedChipSide: String, CaseIterable, Identifiable {
     case breastLeft = "Left"
@@ -21,8 +22,6 @@ enum TimedChipSide: String, CaseIterable, Identifiable {
         case .pumpBoth: return "Both"
         }
     }
-
-    var idleSubtitle: String { "Tap to start" }
 
     /// Title while the chip is running (no “Tap to stop”).
     var runningTitle: String {
@@ -235,7 +234,7 @@ final class BabyHomeStatusModel {
         }
     }
 
-    func selectDiaper(_ kind: DiaperKind) {
+    func selectDiaper(_ kind: DiaperKind, details: DiaperSheetDraft? = nil) {
         applySideEffects(.diaper)
         selectedDiaperKind = nil
         diaperDoneKind = kind
@@ -243,12 +242,18 @@ final class BabyHomeStatusModel {
         BabyHaptics.save()
         scheduleClearDone { self.diaperDoneKind = nil }
         if mode == .live {
+            let action: [String: Any]
+            if let details, kind == .poop || kind == .mixed {
+                action = diaperSheetSaveAction(kind: kind, draft: details)
+            } else {
+                action = [
+                    "kind": "DIAPER",
+                    "diaperKind": kind.apiValue,
+                ]
+            }
             Task {
                 await sendQuickCare(
-                    action: [
-                        "kind": "DIAPER",
-                        "diaperKind": kind.apiValue,
-                    ],
+                    action: action,
                     control: .diaper(kind)
                 )
             }
@@ -280,9 +285,16 @@ final class BabyHomeStatusModel {
             lastFailedControl = nil
             clearRetryPayload()
             needsReconnect = false
+            persistStatusForWidgets()
         } catch {
             applyLiveFailure(error)
         }
+    }
+
+    /// Write App Group snapshot for complications (never includes token).
+    func persistStatusForWidgets() {
+        BabyCareStatusStore.save(snapshot: snapshot)
+        WidgetCenter.shared.reloadTimelines(ofKind: "BabyCareComplication")
     }
 
     /// Unknown-failure retry: reuse the same clientRequestId.
@@ -385,6 +397,7 @@ final class BabyHomeStatusModel {
             snapshot.openNapStartedAt = started
             nap = .running(startedAt: started)
             lastFailedControl = nil
+            persistStatusForWidgets()
             if mode == .live {
                 Task { await sendQuickCare(action: ["kind": "SLEEP"], control: .timed(.nap)) }
             }
@@ -394,6 +407,7 @@ final class BabyHomeStatusModel {
             scheduleClearDoneForSide()
             nap = .done
             lastFailedControl = nil
+            persistStatusForWidgets()
             if mode == .live {
                 Task { await sendQuickCare(action: ["kind": "SLEEP"], control: .timed(.nap)) }
             }
