@@ -507,7 +507,11 @@ struct BabyAPIConfigTests {
 
     @Test func localPresetIsLoopback() {
         #expect(BabyAPIConfig.localPreset == "http://127.0.0.1:3000")
-        #expect(BabyAPIConfig.productionPreset.isEmpty)
+        #expect(BabyAPIConfig.normalize(BabyAPIConfig.productionPreset) != nil)
+    }
+
+    @Test func productionPairingOriginIsAbsoluteHTTP() {
+        #expect(BabyAPIConfig.validate(BabyAPIConfig.productionPairingOrigin))
     }
 
     @Test func authGateShowsConnectWhenNeeded() {
@@ -533,6 +537,17 @@ struct BabyAPITokenStoreTests {
         #expect(store.load() == "mny_secret")
         try store.clear()
         #expect(store.load() == nil)
+    }
+}
+
+struct WatchPairRequestBuilderTests {
+    @Test func redeemURLAppendsPath() {
+        let url = WatchPairRequestBuilder.redeemURL(pairingOriginRaw: "https://app.example.com/")
+        #expect(url?.absoluteString == "https://app.example.com/api/watch/pair/redeem")
+    }
+
+    @Test func emptyCodePathDoesNotBuildURLForBlankOrigin() {
+        #expect(WatchPairRequestBuilder.redeemURL(pairingOriginRaw: "") == nil)
     }
 }
 

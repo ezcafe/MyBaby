@@ -4,9 +4,20 @@ import Foundation
 enum BabyAPIConfig {
     static let baseURLDefaultsKey = "baby.api.baseURL"
     static let localPreset = "http://127.0.0.1:3000"
-    /// Production preset clears the field — user pastes a real https origin.
-    static let productionPreset = ""
+    /// Bootstrap origin for Production pairing redeem (also saved as base URL after redeem).
+    /// Override via Info.plist `BabyProductionPairingOrigin` when set.
+    static var productionPairingOrigin: String {
+        if let plist = Bundle.main.object(forInfoDictionaryKey: "BabyProductionPairingOrigin") as? String,
+           let origin = normalize(plist), !origin.isEmpty
+        {
+            return origin
+        }
+        // Default: local Next for simulator; set plist / constant for real deploy.
+        return "http://127.0.0.1:3000"
+    }
 
+    /// Production preset fills the pairing bootstrap origin (not empty paste field).
+    static var productionPreset: String { productionPairingOrigin }
     /// Strip whitespace and a single trailing `/`. Keep origin only (scheme + host + optional port).
     static func normalize(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)

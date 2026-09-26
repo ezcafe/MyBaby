@@ -4,15 +4,18 @@ WatchOS 10+ companion for one-thumb care logging. Use **sample** mode offline, o
 
 ## Connect to API (live)
 
-1. On the web app: **Settings → API tokens** → enable **Baby Care** → create token → copy `mny_…`.
+1. On the web app (laptop): **Settings → API tokens → Watch pairing → Generate code**.
 2. On Watch: open the connect screen (first launch, or **gear** Settings from care home).
-3. Tap **Local** for simulator (`http://127.0.0.1:3000`) or paste your production `https://…` origin (no `/api/graphql/baby` suffix).
-4. Paste the token → **Save & connect**.
-5. Or **Continue with sample** to use offline sample data.
+3. Tap **Production** (or **Local** for simulator) so the pairing host is set.
+4. Enter the short pairing code → **Save & connect**.
+5. Or **Continue with sample** for offline sample data.
+6. **Advanced:** expand paste URL & token if you need a manual `mny_…` (Local simulator).
 
-Endpoint used: `POST {BASE_URL}/api/graphql/baby` (see my-apps `docs/BABY_API.md`).
+Redeem: `POST {PAIRING_ORIGIN}/api/watch/pair/redeem`. Care calls: `POST {BASE_URL}/api/graphql/baby` (see my-apps `docs/BABY_API.md`).
 
-**Device + local HTTP:** Simulator can use `127.0.0.1`. A physical Watch cannot reach your Mac that way — use an HTTPS tunnel or deploy host. No blanket ATS “allow all HTTP” is enabled; prefer HTTPS for Production.
+**Production origin:** default bootstrap is `http://127.0.0.1:3000` for simulator. For a deployed host, set Info.plist `BabyProductionPairingOrigin` to your HTTPS origin (no `/api/graphql/baby` suffix).
+
+**Device + local HTTP:** Simulator can use `127.0.0.1`. A physical Watch cannot reach your Mac that way — use an HTTPS tunnel or deploy host. Prefer HTTPS for Production.
 
 ## Web → Watch page map
 
