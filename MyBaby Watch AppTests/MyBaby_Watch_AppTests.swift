@@ -92,7 +92,7 @@ struct BabyHomeStatusTests {
     @Test func timelineRefreshUsesNapOrDue() {
         let nap = BabyHomeStatusSnapshot.sampleOpenNap()
         let next = BabyCareWidgetTimeline.nextUpdate(for: nap, now: Date(timeIntervalSince1970: 1_000_000))
-        #expect(next.timeIntervalSince1970 == 1_000_000 + 60)
+        #expect(next.timeIntervalSince1970 == 1_000_000 + 15 * 60)
 
         let feed = BabyHomeStatusSnapshot.sampleNextFeed()
         let due = BabyCareWidgetTimeline.nextUpdate(for: feed, now: Date(timeIntervalSince1970: 1_000_000))
@@ -1032,5 +1032,221 @@ struct BabyLiveModelTests {
         let secondary = BabyCarePrimarySignal.secondaryLine(snapshot: snap, primary: primary)
         #expect(!secondary.isEmpty)
         #expect(secondary != BabyCarePrimarySignal.shortLabel(primary) || secondary.contains("feed") || secondary.contains("Feed") || secondary.contains("Nap") || !snap.lastFeed.isEmpty)
+    }
+
+    @Test func complicationDisplayPrefersOpenNap() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let display = BabyCareComplicationDisplay.resolve(.sampleOpenNap(now: now), now: now)
+        guard case .running(let kind, _) = display.mode else {
+            Issue.record("Expected running, got \(display.mode)")
+            return
+        }
+        #expect(kind == .nap)
+        #expect(display.color == .teal)
+        #expect(display.deepLinkPage == .sleep)
+        #expect(!display.kindLabel.isEmpty)
+    }
+
+    @Test func complicationDisplayPrefersBreastWhenNoNap() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        var snap = BabyHomeStatusSnapshot.sampleNextFeed(now: now)
+        snap.openNapStartedAt = nil
+        snap.runningTimerKind = .breastLeft
+        snap.runningTimerStartedAt = now.addingTimeInterval(-90)
+        let display = BabyCareComplicationDisplay.resolve(snap, now: now)
+        guard case .running(let kind, let started) = display.mode else {
+            Issue.record("Expected breast running, got \(display.mode)")
+            return
+        }
+        #expect(kind == .breastLeft)
+        #expect(started == snap.runningTimerStartedAt)
+        #expect(display.deepLinkPage == .feed)
+    }
+
+    @Test func complicationDisplayPrefersPumpWhenNoNapOrBreast() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        var snap = BabyHomeStatusSnapshot.sampleNextFeed(now: now)
+        snap.openNapStartedAt = nil
+        snap.runningTimerKind = .pumpBoth
+        snap.runningTimerStartedAt = now.addingTimeInterval(-30)
+        let display = BabyCareComplicationDisplay.resolve(snap, now: now)
+        guard case .running(let kind, _) = display.mode else {
+            Issue.record("Expected pump running, got \(display.mode)")
+            return
+        }
+        #expect(kind == .pumpBoth)
+        #expect(display.deepLinkPage == .pump)
+    }
+
+    @Test func complicationDisplayNapBeatsBreast() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        var snap = BabyHomeStatusSnapshot.sampleOpenNap(now: now)
+        snap.runningTimerKind = .breastRight
+        snap.runningTimerStartedAt = now
+        let display = BabyCareComplicationDisplay.resolve(snap, now: now)
+        guard case .running(let kind, _) = display.mode else {
+            Issue.record("Expected nap, got \(display.mode)")
+            return
+        }
+        #expect(kind == .nap)
+    }
+
+    @Test func complicationDisplayIdleInRangeIsTeal() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let snap = BabyHomeStatusSnapshot.sampleNextFeed(now: now)
+        let display = BabyCareComplicationDisplay.resolve(snap, now: now)
+        guard case .idle(let kind, _, _) = display.mode else {
+            Issue.record("Expected idle, got \(display.mode)")
+            return
+        }
+        #expect(kind == .feed || kind == .diaper)
+        #expect(display.color == .teal)
+        #expect(!display.kindLabel.isEmpty)
+        #expect(display.idleRelative != nil)
+    }
+
+    @Test func complicationDisplayIdleOutOfRangeIsRed() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let snap = BabyHomeStatusSnapshot.sampleOverdueFeed(now: now)
+        let display = BabyCareComplicationDisplay.resolve(snap, now: now)
+        guard case .idle(let kind, _, _) = display.mode else {
+            Issue.record("Expected idle overdue, got \(display.mode)")
+            return
+        }
+        #expect(kind == .feed)
+        #expect(display.color == .red)
+        #expect(!display.kindLabel.isEmpty)
+    }
+
+    @Test func complicationDisplayFixedPumpIgnoresNapTimer() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        var snap = BabyHomeStatusSnapshot.sampleOpenNap(now: now)
+        snap.lastPumpAt = now.addingTimeInterval(-45 * 60)
+        snap.lastPump = .init(
+            iconSystemName: "drop.fill",
+            sentence: "Pump 80 ml · 45m",
+            isEmpty: false
+        )
+        let display = BabyCareComplicationDisplay.resolve(snap, careType: .pump, now: now)
+        guard case .idle(let kind, _, _) = display.mode else {
+            Issue.record("Expected idle pump, got \(display.mode)")
+            return
+        }
+        #expect(kind == .pump)
+        #expect(display.deepLinkPage == .pump)
+    }
+
+    @Test func complicationDisplayFixedSleepShowsNapTimer() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let snap = BabyHomeStatusSnapshot.sampleOpenNap(now: now)
+        let display = BabyCareComplicationDisplay.resolve(snap, careType: .sleep, now: now)
+        guard case .running(let kind, _) = display.mode else {
+            Issue.record("Expected nap running, got \(display.mode)")
+            return
+        }
+        #expect(kind == .nap)
+        #expect(display.deepLinkPage == .sleep)
+    }
+
+    @Test func complicationDisplayFixedFeedShowsBreastNotNap() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        var snap = BabyHomeStatusSnapshot.sampleOpenNap(now: now)
+        snap.runningTimerKind = .breastLeft
+        snap.runningTimerStartedAt = now.addingTimeInterval(-60)
+        let display = BabyCareComplicationDisplay.resolve(snap, careType: .feed, now: now)
+        guard case .running(let kind, _) = display.mode else {
+            Issue.record("Expected breast running, got \(display.mode)")
+            return
+        }
+        #expect(kind == .breastLeft)
+        #expect(display.deepLinkPage == .feed)
+    }
+
+    @Test func complicationDisplayFixedDiaperDeepLinksEvenWhenEmpty() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        var snap = BabyHomeStatusSnapshot.sampleNextFeed(now: now)
+        snap.lastDiaperAt = nil
+        snap.lastDiaper = .init(
+            iconSystemName: "leaf.fill",
+            sentence: "No diaper yet",
+            isEmpty: true
+        )
+        let display = BabyCareComplicationDisplay.resolve(snap, careType: .diaper, now: now)
+        #expect(display.mode == .empty)
+        #expect(display.deepLinkPage == .diaper)
+    }
+
+    @Test func complicationCareTypeAutoDeepLinkFollowsResolved() {
+        #expect(BabyCareComplicationCareType.auto.fixedDeepLinkPage == nil)
+        #expect(BabyCareComplicationCareType.pump.fixedDeepLinkPage == .pump)
+        #expect(BabyCareComplicationCareType.sleep.fixedDeepLinkPage == .sleep)
+    }
+
+    @Test func formatRelativeLinesUsesHoursOnlyWhenAtLeastOneHour() {
+        let lines = BabyCareComplicationDisplay.formatRelativeLines(12 * 3600 + 38 * 60)
+        #expect(lines.line1 == "12h")
+        #expect(lines.line2 == nil)
+        #expect(BabyCareComplicationDisplay.formatRelative(12 * 3600 + 38 * 60) == "12h")
+    }
+
+    @Test func formatRelativeLinesKeepsShortAgesOnOneLine() {
+        #expect(BabyCareComplicationDisplay.formatRelativeLines(25 * 60) == ("25m", nil))
+        #expect(BabyCareComplicationDisplay.formatRelativeLines(2 * 3600) == ("2h", nil))
+        #expect(BabyCareComplicationDisplay.formatRelative(90 * 60) == "1h")
+    }
+
+    @Test func careGuideFeedIntervalPositive() {
+        #expect(CareGuideIntervals.feedMaxGapSeconds(ageDays: 10) > 0)
+        #expect(CareGuideIntervals.diaperMaxGapSeconds(ageDays: 10) == 3 * 3600)
+    }
+
+    @Test func statusStorePersistsRunningBreast() throws {
+        let suite = "BabyCareStatusStoreBreast.\(UUID().uuidString)"
+        defer {
+            BabyCareStatusStore.defaults(suiteName: suite)?
+                .removePersistentDomain(forName: suite)
+        }
+        var snap = BabyHomeStatusSnapshot.sampleNextFeed()
+        snap.openNapStartedAt = nil
+        snap.runningTimerKind = .breastLeft
+        snap.runningTimerStartedAt = Date(timeIntervalSince1970: 9_000)
+        BabyCareStatusStore.save(snapshot: snap, suiteName: suite)
+        let loaded = BabyCareStatusStore.snapshotForWidgets(suiteName: suite)
+        #expect(loaded.runningTimerKind == .breastLeft)
+        #expect(loaded.runningTimerStartedAt == snap.runningTimerStartedAt)
+    }
+
+    @Test func statusStorePersistsRunningPump() throws {
+        let suite = "BabyCareStatusStorePump.\(UUID().uuidString)"
+        defer {
+            BabyCareStatusStore.defaults(suiteName: suite)?
+                .removePersistentDomain(forName: suite)
+        }
+        var snap = BabyHomeStatusSnapshot.sampleNextFeed()
+        snap.openNapStartedAt = nil
+        snap.runningTimerKind = .pumpRight
+        snap.runningTimerStartedAt = Date(timeIntervalSince1970: 9_100)
+        BabyCareStatusStore.save(snapshot: snap, suiteName: suite)
+        let loaded = BabyCareStatusStore.snapshotForWidgets(suiteName: suite)
+        #expect(loaded.runningTimerKind == .pumpRight)
+        #expect(loaded.runningTimerStartedAt == snap.runningTimerStartedAt)
+    }
+
+    @Test func mapperParsesLastFeedAtAndOverdue() throws {
+        let now = Date(timeIntervalSince1970: 1_735_689_600)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        let past = formatter.string(from: now.addingTimeInterval(-5 * 3600))
+        let json = """
+        {"babyHomeQuickStatus":{
+          "lastFeed":{"at":"\(past)","summary":"Bottle 100 ml"},
+          "birthDate":"2024-09-01"
+        }}
+        """
+        let data = Data(json.utf8)
+        let payload = try BabyHomeStatusMapper.decodeStatusData(data)
+        let snap = BabyHomeStatusMapper.map(payload, now: now)
+        #expect(snap.lastFeedAt != nil)
+        #expect(snap.feedOverdueSeconds != nil)
     }
 }

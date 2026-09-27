@@ -40,11 +40,11 @@ Aliases (same pages): `breast` / `bottle` → Feed; `nap` → Sleep; `pump-amoun
 
 1. Build & run **MyBaby Watch App** on a watchOS 10+ simulator or device (embeds **MyBaby Watch Widgets**).
 2. Enable App Group `group.vn.in4.MyBaby` on Watch app + widgets (signing).
-3. **Face complications:** long-press face → Edit → pick a slot → choose **Baby Care** (circular / corner / rectangular / inline).
-4. **Smart Stack:** turn Digital Crown to Smart Stack → Edit → add **Baby Care** (accessory circular / rectangular).
-5. Tap a companion to open the matching home page.
+3. **Face complications:** long-press face → Edit → pick a slot → choose **Baby Care** → set **Care type** (Auto or Feed / Sleep / Diaper / Pump).
+4. **Smart Stack:** turn Digital Crown to Smart Stack → Edit → add **Baby Care** (or a preconfigured Feed/Sleep/… recommendation) → set **Care type** if needed.
+5. Tap a companion to open the matching home page (Pump → Pump, Sleep → Sleep, Auto → page for what is shown).
 
-Companions share one **Baby Care** widget kind. They read the App Group snapshot written by the app (open nap → overdue → next feed → last care). Rectangular shows one primary + one secondary line. Logging stays in the app.
+Companions share one **Baby Care** widget kind. Edit a slot to pick **Care type**: **Auto** (any running timer, else latest care), or **Feed / Sleep / Diaper / Pump**. Tap opens the matching home page. They read the App Group snapshot written by the app. While a care timer runs (for that type, or any type when Auto), the face shows a live timer; when idle, last care time in teal (in range) or red (out of range). Logging stays in the app.
 
 ## Project layout
 

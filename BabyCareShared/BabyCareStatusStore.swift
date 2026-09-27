@@ -5,6 +5,8 @@ struct BabyCareStatusDTO: Codable, Equatable, Sendable {
     var version: Int
     var writtenAt: Date
     var openNapStartedAt: Date?
+    var runningTimerKind: String?
+    var runningTimerStartedAt: Date?
     var nextFeedInSeconds: TimeInterval?
     var feedOverdueSeconds: TimeInterval?
     var diaperOverdueSeconds: TimeInterval?
@@ -14,13 +16,19 @@ struct BabyCareStatusDTO: Codable, Equatable, Sendable {
     var lastNapSentence: String
     var lastDiaperIcon: String
     var lastDiaperSentence: String
+    var lastPumpIcon: String?
+    var lastPumpSentence: String?
+    var lastFeedAt: Date?
+    var lastNapAt: Date?
+    var lastDiaperAt: Date?
+    var lastPumpAt: Date?
     var ageDays: Int
 }
 
 enum BabyCareStatusStore {
     static let appGroupId = "group.vn.in4.MyBaby"
     static let storageKey = "BabyCareStatusDTO.v1"
-    static let dtoVersion = 1
+    static let dtoVersion = 2
 
     /// Coding keys that must never appear on the DTO (security check for tests).
     static let forbiddenKeys: Set<String> = [
@@ -36,6 +44,8 @@ enum BabyCareStatusStore {
             version: dtoVersion,
             writtenAt: now,
             openNapStartedAt: snapshot.openNapStartedAt,
+            runningTimerKind: snapshot.runningTimerKind?.rawValue,
+            runningTimerStartedAt: snapshot.runningTimerStartedAt,
             nextFeedInSeconds: snapshot.nextFeedInSeconds,
             feedOverdueSeconds: snapshot.feedOverdueSeconds,
             diaperOverdueSeconds: snapshot.diaperOverdueSeconds,
@@ -45,6 +55,12 @@ enum BabyCareStatusStore {
             lastNapSentence: snapshot.lastNap.sentence,
             lastDiaperIcon: snapshot.lastDiaper.iconSystemName,
             lastDiaperSentence: snapshot.lastDiaper.sentence,
+            lastPumpIcon: snapshot.lastPump.iconSystemName,
+            lastPumpSentence: snapshot.lastPump.sentence,
+            lastFeedAt: snapshot.lastFeedAt,
+            lastNapAt: snapshot.lastNapAt,
+            lastDiaperAt: snapshot.lastDiaperAt,
+            lastPumpAt: snapshot.lastPumpAt,
             ageDays: snapshot.ageDays
         )
     }
@@ -81,6 +97,8 @@ enum BabyCareStatusStore {
         var snap = base
         snap.ageDays = dto.ageDays
         snap.openNapStartedAt = dto.openNapStartedAt
+        snap.runningTimerKind = dto.runningTimerKind.flatMap(BabyCareRunningTimerKind.init(rawValue:))
+        snap.runningTimerStartedAt = dto.runningTimerStartedAt
         snap.nextFeedInSeconds = dto.nextFeedInSeconds
         snap.feedOverdueSeconds = dto.feedOverdueSeconds
         snap.diaperOverdueSeconds = dto.diaperOverdueSeconds
@@ -99,6 +117,17 @@ enum BabyCareStatusStore {
             sentence: dto.lastDiaperSentence,
             isEmpty: dto.lastDiaperSentence.isEmpty
         )
+        if let icon = dto.lastPumpIcon, let sentence = dto.lastPumpSentence {
+            snap.lastPump = .init(
+                iconSystemName: icon,
+                sentence: sentence,
+                isEmpty: sentence.isEmpty
+            )
+        }
+        snap.lastFeedAt = dto.lastFeedAt
+        snap.lastNapAt = dto.lastNapAt
+        snap.lastDiaperAt = dto.lastDiaperAt
+        snap.lastPumpAt = dto.lastPumpAt
         return snap
     }
 

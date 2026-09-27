@@ -53,6 +53,37 @@ enum BabyHomeStatusMapper {
             limit: 3
         )
         let openNap = parseDate(payload.openSleep?.occurredAt)
+        let lastFeedAt = parseDate(payload.lastFeed?.at)
+        let lastNapAt = parseDate(payload.lastSleep?.at)
+        let lastDiaperAt = parseDate(payload.lastDiaper?.at)
+        let lastPumpAt = parseDate(payload.lastPump?.at)
+
+        var feedOverdue: TimeInterval?
+        if let lastFeedAt,
+           CareGuideIntervals.isOutOfRange(kind: .feed, eventAt: lastFeedAt, ageDays: ageDays, now: now)
+        {
+            feedOverdue = max(
+                0,
+                now.timeIntervalSince(lastFeedAt) - CareGuideIntervals.feedMaxGapSeconds(ageDays: ageDays)
+            )
+        }
+
+        var diaperOverdue: TimeInterval?
+        if let lastDiaperAt,
+           CareGuideIntervals.isOutOfRange(kind: .diaper, eventAt: lastDiaperAt, ageDays: ageDays, now: now)
+        {
+            diaperOverdue = max(
+                0,
+                now.timeIntervalSince(lastDiaperAt) - CareGuideIntervals.diaperMaxGapSeconds(ageDays: ageDays)
+            )
+        }
+
+        var nextFeed: TimeInterval?
+        if let lastFeedAt, feedOverdue == nil {
+            let gap = CareGuideIntervals.feedMaxGapSeconds(ageDays: ageDays)
+            let remaining = gap - now.timeIntervalSince(lastFeedAt)
+            if remaining >= 0 { nextFeed = remaining }
+        }
 
         return BabyHomeStatusSnapshot(
             title: BabyHomeStatusSnapshot.ageTitle(ageDays: ageDays),
@@ -65,9 +96,11 @@ enum BabyHomeStatusMapper {
             diaperTip: CareGuideTips.diaperTip(ageDays: ageDays),
             pumpTip: CareGuideTips.pumpTip(ageDays: ageDays),
             openNapStartedAt: openNap,
-            nextFeedInSeconds: nil,
-            feedOverdueSeconds: nil,
-            diaperOverdueSeconds: nil,
+            runningTimerKind: nil,
+            runningTimerStartedAt: nil,
+            nextFeedInSeconds: nextFeed,
+            feedOverdueSeconds: feedOverdue,
+            diaperOverdueSeconds: diaperOverdue,
             lastFeed: statusLine(
                 summary: payload.lastFeed?.summary,
                 emptyIcon: "waterbottle.fill",
@@ -88,6 +121,10 @@ enum BabyHomeStatusMapper {
                 emptyIcon: "drop.fill",
                 emptyText: "No pump yet"
             ),
+            lastFeedAt: lastFeedAt,
+            lastNapAt: lastNapAt,
+            lastDiaperAt: lastDiaperAt,
+            lastPumpAt: lastPumpAt,
             recentBottleMl: recentInts
         )
     }

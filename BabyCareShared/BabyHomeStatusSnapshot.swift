@@ -18,6 +18,9 @@ struct BabyHomeStatusSnapshot: Equatable, Sendable {
     var diaperTip: String
     var pumpTip: String
     var openNapStartedAt: Date?
+    /// Local breast/pump timer while running (nap uses `openNapStartedAt`).
+    var runningTimerKind: BabyCareRunningTimerKind?
+    var runningTimerStartedAt: Date?
     var nextFeedInSeconds: TimeInterval?
     var feedOverdueSeconds: TimeInterval?
     var diaperOverdueSeconds: TimeInterval?
@@ -25,6 +28,10 @@ struct BabyHomeStatusSnapshot: Equatable, Sendable {
     var lastNap: BabyCareStatusLine
     var lastDiaper: BabyCareStatusLine
     var lastPump: BabyCareStatusLine
+    var lastFeedAt: Date?
+    var lastNapAt: Date?
+    var lastDiaperAt: Date?
+    var lastPumpAt: Date?
     /// Distinct recent formula ml for chip builder (web `recentBottleMl`).
     var recentBottleMl: [Int]
 
@@ -71,6 +78,8 @@ struct BabyHomeStatusSnapshot: Equatable, Sendable {
             diaperTip: CareGuideTips.diaperTip(ageDays: ageDays),
             pumpTip: CareGuideTips.pumpTip(ageDays: ageDays),
             openNapStartedAt: nil,
+            runningTimerKind: nil,
+            runningTimerStartedAt: nil,
             nextFeedInSeconds: 12 * 60,
             feedOverdueSeconds: nil,
             diaperOverdueSeconds: nil,
@@ -95,6 +104,10 @@ struct BabyHomeStatusSnapshot: Equatable, Sendable {
                 sentence: "No pump yet",
                 isEmpty: true
             ),
+            lastFeedAt: now.addingTimeInterval(-25 * 60),
+            lastNapAt: nil,
+            lastDiaperAt: now.addingTimeInterval(-60 * 60),
+            lastPumpAt: nil,
             recentBottleMl: recent
         )
     }
@@ -110,6 +123,24 @@ struct BabyHomeStatusSnapshot: Equatable, Sendable {
             sentence: "Napping · 12:04",
             isEmpty: false
         )
+        return s
+    }
+
+    /// Idle overdue feed for complication previews (Gate A2 red state).
+    static func sampleOverdueFeed(now: Date = .now) -> BabyHomeStatusSnapshot {
+        var s = sampleNextFeed(now: now)
+        s.nextFeedInSeconds = nil
+        s.lastFeedAt = now.addingTimeInterval(-5 * 3600)
+        s.lastFeed = .init(
+            iconSystemName: "waterbottle.fill",
+            sentence: "Bottle 120 ml · 5h",
+            isEmpty: false
+        )
+        // Ensure feed is the latest care event for idle primary.
+        s.lastDiaperAt = now.addingTimeInterval(-6 * 3600)
+        s.lastNapAt = nil
+        s.lastPumpAt = nil
+        s.feedOverdueSeconds = 2 * 3600
         return s
     }
 }

@@ -357,10 +357,17 @@ final class BabyHomeStatusModel {
             if active == .breastLeft {
                 if case .running = breastRight { breastRight = .idle }
                 breastLeft = .running(startedAt: .now)
+                snapshot.runningTimerKind = .breastLeft
+                snapshot.runningTimerStartedAt = .now
+                snapshot.openNapStartedAt = nil
             } else {
                 if case .running = breastLeft { breastLeft = .idle }
                 breastRight = .running(startedAt: .now)
+                snapshot.runningTimerKind = .breastRight
+                snapshot.runningTimerStartedAt = .now
+                snapshot.openNapStartedAt = nil
             }
+            persistStatusForWidgets()
         case .running(let startedAt):
             let duration = max(Int(Date.now.timeIntervalSince(startedAt)), 1)
             applySideEffects(.breast)
@@ -371,6 +378,8 @@ final class BabyHomeStatusModel {
             } else {
                 breastRight = .done
             }
+            clearRunningTimerIfBreast()
+            persistStatusForWidgets()
             if mode == .live {
                 Task {
                     await sendQuickCare(
@@ -395,6 +404,8 @@ final class BabyHomeStatusModel {
             applySideEffects(.sleep)
             let started = Date.now
             snapshot.openNapStartedAt = started
+            snapshot.runningTimerKind = nil
+            snapshot.runningTimerStartedAt = nil
             nap = .running(startedAt: started)
             lastFailedControl = nil
             persistStatusForWidgets()
@@ -438,13 +449,23 @@ final class BabyHomeStatusModel {
             applySideEffects(.pumpTimer)
             lastFailedControl = nil
             clearOtherPumpSides(except: side)
-            let running = TimedChipPhase.running(startedAt: .now)
+            let started = Date.now
+            let running = TimedChipPhase.running(startedAt: started)
             switch side {
-            case .pumpLeft: pumpLeft = running
-            case .pumpRight: pumpRight = running
-            case .pumpBoth: pumpBoth = running
+            case .pumpLeft:
+                pumpLeft = running
+                snapshot.runningTimerKind = .pumpLeft
+            case .pumpRight:
+                pumpRight = running
+                snapshot.runningTimerKind = .pumpRight
+            case .pumpBoth:
+                pumpBoth = running
+                snapshot.runningTimerKind = .pumpBoth
             default: break
             }
+            snapshot.runningTimerStartedAt = started
+            snapshot.openNapStartedAt = nil
+            persistStatusForWidgets()
         case .running(let startedAt):
             let duration = max(Int(Date.now.timeIntervalSince(startedAt)), 1)
             applySideEffects(.pumpTimer)
@@ -456,6 +477,8 @@ final class BabyHomeStatusModel {
             case .pumpBoth: pumpBoth = .done
             default: break
             }
+            clearRunningTimerIfPump()
+            persistStatusForWidgets()
             if mode == .live {
                 Task {
                     await sendQuickCare(
@@ -541,6 +564,26 @@ final class BabyHomeStatusModel {
         if keep != .pumpLeft, case .running = pumpLeft { pumpLeft = .idle }
         if keep != .pumpRight, case .running = pumpRight { pumpRight = .idle }
         if keep != .pumpBoth, case .running = pumpBoth { pumpBoth = .idle }
+    }
+
+    private func clearRunningTimerIfBreast() {
+        switch snapshot.runningTimerKind {
+        case .breastLeft, .breastRight:
+            snapshot.runningTimerKind = nil
+            snapshot.runningTimerStartedAt = nil
+        default:
+            break
+        }
+    }
+
+    private func clearRunningTimerIfPump() {
+        switch snapshot.runningTimerKind {
+        case .pumpLeft, .pumpRight, .pumpBoth:
+            snapshot.runningTimerKind = nil
+            snapshot.runningTimerStartedAt = nil
+        default:
+            break
+        }
     }
 
     private func applySideEffects(_ action: CareQuickAction) {
