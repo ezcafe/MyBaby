@@ -924,6 +924,21 @@ struct BabyLiveModelTests {
         #expect(model.selectedPage == .feed)
     }
 
+    @Test @MainActor func deepLinkSleepJumpsFromFeedWithoutKeepingFeed() {
+        let model = BabyHomeStatusModel()
+        #expect(model.selectedPage == .feed)
+        model.applyDeepLink(BabyHomeDeepLink.url(page: .sleep))
+        #expect(model.selectedPage == .sleep)
+        #expect(!model.showSettingsSheet)
+    }
+
+    @Test @MainActor func deepLinkPumpJumpsFromSleep() {
+        let model = BabyHomeStatusModel()
+        model.selectedPage = .sleep
+        model.applyDeepLink(BabyHomeDeepLink.url(page: .pump))
+        #expect(model.selectedPage == .pump)
+    }
+
     @Test @MainActor func logoutClearsTokenAndDisconnects() {
         let store = InMemoryBabyAPITokenStore()
         try? store.save("mny_test_token")

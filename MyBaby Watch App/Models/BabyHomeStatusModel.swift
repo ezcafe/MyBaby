@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 import WidgetKit
 
 enum TimedChipSide: String, CaseIterable, Identifiable {
@@ -315,7 +316,12 @@ final class BabyHomeStatusModel {
             showSettingsSheet = true
             return
         }
-        selectedPage = BabyHomeDeepLink.page(from: url)
+        let page = BabyHomeDeepLink.page(from: url)
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            selectedPage = page
+        }
     }
 
     /// Footer Retry: re-send last failed quick-care, or reload status when no chip fail.
