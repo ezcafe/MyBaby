@@ -643,23 +643,23 @@ struct BabyAPIConfigTests {
         #expect(BabyAPIConfig.loadBaseURL(defaults: defaults) == "https://app.example")
     }
 
-    @Test func resolveHostPresetLocal() {
+    @Test func resolveHostPresetCloudForLocalURL() {
         #expect(
-            BabyAPIConfig.resolveHostPreset(for: BabyAPIConfig.localPreset) == .local
+            BabyAPIConfig.resolveHostPreset(for: BabyAPIConfig.localPreset) == .cloud
         )
         #expect(
-            BabyAPIConfig.resolveHostPreset(for: "http://127.0.0.1:3000/") == .local
+            BabyAPIConfig.resolveHostPreset(for: "http://127.0.0.1:3000/") == .cloud
         )
     }
 
-    @Test func resolveHostPresetProductionWhenDistinct() {
+    @Test func resolveHostPresetCloudWhenDistinct() {
         let prod = "https://app.example.com"
         #expect(
             BabyAPIConfig.resolveHostPreset(
                 for: prod,
-                localPreset: BabyAPIConfig.localPreset,
-                productionPreset: prod
-            ) == .production
+                cloudPreset: prod,
+                localPreset: BabyAPIConfig.localPreset
+            ) == .cloud
         )
     }
 
@@ -671,10 +671,37 @@ struct BabyAPIConfigTests {
         )
     }
 
-    @Test func urlFieldVisibleOnlyForProduction() {
-        #expect(!ConnectHostURLField.isVisible(selected: .local))
-        #expect(ConnectHostURLField.isVisible(selected: .production))
+    @Test func urlFieldVisibleOnlyForCloud() {
+        #expect(!ConnectHostURLField.isVisible(selected: .offline))
+        #expect(ConnectHostURLField.isVisible(selected: .cloud))
         #expect(!ConnectHostURLField.isVisible(selected: .none))
+    }
+
+    @Test func connectDefaultsOfflineAndCloudURL() {
+        #expect(ConnectHostURLField.defaultPreset == .offline)
+        #expect(ConnectHostURLField.cloudDefaultURL == BabyAPIConfig.localPreset)
+        #expect(!ConnectHostURLField.showsPairingFields(selected: .offline))
+        #expect(ConnectHostURLField.showsPairingFields(selected: .cloud))
+    }
+
+    @Test func selectingCloudResetsDefaultURL() {
+        let next = ConnectPresetSelection.apply(.cloud, baseURL: "https://stale.example")
+        #expect(next.selected == .cloud)
+        #expect(next.baseURL == ConnectHostURLField.cloudDefaultURL)
+    }
+
+    @Test func selectingOfflineKeepsURLButHidesFields() {
+        let next = ConnectPresetSelection.apply(.offline, baseURL: "https://keep.example")
+        #expect(next.selected == .offline)
+        #expect(next.baseURL == "https://keep.example")
+        #expect(!ConnectHostURLField.isVisible(selected: next.selected))
+    }
+
+    /// Plain chips with clear fill are not tappable on watchOS outside the text.
+    @Test func connectPresetChipsUseOpaqueFillForHitTesting() {
+        #expect(ConnectPresetChipHit.fill(isSelected: true) == .accent)
+        #expect(ConnectPresetChipHit.fill(isSelected: false) == .material)
+        #expect(ConnectPresetChipHit.fill(isSelected: false) != .clear)
     }
 }
 
@@ -1263,5 +1290,98 @@ struct BabyLiveModelTests {
         let snap = BabyHomeStatusMapper.map(payload, now: now)
         #expect(snap.lastFeedAt != nil)
         #expect(snap.feedOverdueSeconds != nil)
+    }
+}
+
+struct OfflineCareStoreTests {
+    @Test func inMemoryAppendAndFetchRecent() async throws {
+        let store = InMemoryOfflineCareStore()
+        let older = CareEvent(kind: "bottle", at: Date(timeIntervalSince1970: 100), ml: 90)
+        let newer = CareEvent(kind: "diaper", at: Date(timeIntervalSince1970: 200), diaperKind: "wet")
+        try await store.append(older)
+        try await store.append(newer)
+        let recent = try await store.fetchRecent(limit: 10)
+        #expect(recent.count == 2)
+        #expect(recent.first?.kind == "diaper")
+    }
+
+    @Test func projectorSetsLastBottleAndDiaper() {
+        let events = [
+            CareEvent(kind: "bottle", at: Date(timeIntervalSince1970: 1), ml: 120),
+            CareEvent(kind: "diaper", at: Date(timeIntervalSince1970: 2), diaperKind: "wet"),
+        ]
+        let snap = OfflineSnapshotProjector.make(events: events, ageDays: 100)
+        #expect(snap.lastFeed.isEmpty == false)
+        #expect(snap.lastFeed.sentence.contains("120"))
+        #expect(snap.lastDiaper.isEmpty == false)
+        #expect(snap.lastFeedAt != nil)
+        #expect(snap.lastDiaperAt != nil)
+    }
+
+    @Test func projectorOpenNapFromNapStart() {
+        let start = Date(timeIntervalSince1970: 50)
+        let snap = OfflineSnapshotProjector.make(
+            events: [CareEvent(kind: "nap_start", at: start)],
+            ageDays: 90
+        )
+        #expect(snap.openNapStartedAt == start)
+    }
+
+    @Test func careDataModeStoreRoundTrip() {
+        let suite = "CareDataModeStore.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        CareDataModeStore.save(.offline, defaults: defaults)
+        #expect(CareDataModeStore.load(defaults: defaults) == .offline)
+        CareDataModeStore.clear(defaults: defaults)
+        #expect(CareDataModeStore.load(defaults: defaults) == nil)
+    }
+
+    @Test func shouldRestoreOfflineWhenSaved() {
+        #expect(
+            BabySessionRestore.shouldRestoreOffline(savedMode: .offline, isConnected: false)
+        )
+        #expect(
+            !BabySessionRestore.shouldRestoreOffline(savedMode: .live, isConnected: false)
+        )
+        #expect(
+            !BabySessionRestore.shouldRestoreOffline(savedMode: .offline, isConnected: true)
+        )
+    }
+
+    @Test @MainActor func useOfflineConnectsWithoutToken() async throws {
+        let store = InMemoryOfflineCareStore()
+        let model = BabyHomeStatusModel()
+        model.useOffline(store: store)
+        #expect(model.mode == .offline)
+        #expect(model.isConnected)
+        #expect(model.graphQLClient == nil)
+        try await store.append(CareEvent(kind: "bottle", ml: 100))
+        await model.refreshOfflineSnapshot()
+        #expect(model.snapshot.lastFeed.isEmpty == false)
+        #expect(AuthGate.showsConnect(bypassAuth: false, isConnected: model.isConnected) == false)
+    }
+
+    @Test @MainActor func logoutClearsOfflineSessionButNotStoreEvents() async throws {
+        let store = InMemoryOfflineCareStore()
+        try await store.append(CareEvent(kind: "bottle", ml: 80))
+        let model = BabyHomeStatusModel()
+        model.useOffline(store: store)
+        let tokenStore = InMemoryBabyAPITokenStore()
+        model.logout(tokenStore: tokenStore)
+        #expect(!model.isConnected)
+        #expect(model.offlineStore == nil)
+        let remaining = try await store.fetchRecent(limit: 10)
+        #expect(remaining.count == 1)
+    }
+
+    @Test @MainActor func offlineBottleAppendsEvent() async throws {
+        let store = InMemoryOfflineCareStore()
+        let model = BabyHomeStatusModel()
+        model.useOffline(store: store)
+        model.selectBottle(ml: 150)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        let events = try await store.fetchRecent(limit: 5)
+        #expect(events.contains { $0.kind == "bottle" && $0.ml == 150 })
     }
 }

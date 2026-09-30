@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Proposed — Connect Cloud</title>
+  <style>
+    :root {
+      --bg: #FAFAFA;
+      --fg: #1A1A1A;
+      --muted: #6B6B6B;
+      --accent: #0D9488;
+      --accent-fg: #FFFFFF;
+      --hairline: #E5E5E5;
+      --radius-outer: 8px;
+      --radius-nested: 6px;
+      --chip-h: 44px;
+      --secondary: 11px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #e8e8e8;
+      font-family: -apple-system, system-ui, sans-serif;
+    }
+    .watch {
+      width: 198px;
+      height: 242px;
+      padding: 10px 8px;
+      background: var(--bg);
+      color: var(--fg);
+      border-radius: 40px;
+      border: 8px solid #222;
+      overflow: auto;
+    }
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+    }
+    h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .presets {
+      display: flex;
+      gap: 6px;
+    }
+    .chip {
+      flex: 1;
+      height: var(--chip-h);
+      border: none;
+      border-radius: var(--radius-nested);
+      font-size: var(--secondary);
+      font-weight: 600;
+      background: rgba(0,0,0,0.06);
+      color: var(--fg);
+      cursor: default;
+    }
+    .chip.on {
+      background: var(--accent);
+      color: var(--accent-fg);
+    }
+    .field {
+      height: var(--chip-h);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-nested);
+      padding: 0 8px;
+      font-size: var(--secondary);
+      color: var(--fg);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .field.muted { color: var(--muted); }
+    .primary {
+      height: var(--chip-h);
+      border: none;
+      border-radius: var(--radius-outer);
+      background: var(--accent);
+      color: var(--accent-fg);
+      font-size: 14px;
+      font-weight: 700;
+      width: 100%;
+    }
+    .link {
+      margin: 0;
+      font-size: var(--secondary);
+      color: var(--muted);
+      text-align: center;
+    }
+    .note {
+      margin-top: 12px;
+      max-width: 280px;
+      font-size: 12px;
+      color: #555;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <div class="watch" aria-label="Watch Connect — Cloud with local URL default">
+      <div class="stack">
+        <h1>API server</h1>
+        <div class="presets" role="group" aria-label="Mode">
+          <button type="button" class="chip">Offline</button>
+          <button type="button" class="chip on" aria-pressed="true">Cloud</button>
+        </div>
+        <div class="field" title="Default URL">http://127.0.0.1:3000</div>
+        <div class="field muted">Pairing code</div>
+        <button type="button" class="primary">Save &amp; connect</button>
+        <p class="link">Need help?</p>
+      </div>
+    </div>
+    <p class="note">Cloud selected (live API, formerly Production): URL default = <code>http://127.0.0.1:3000</code>. No Local chip.</p>
+  </div>
+</body>
+</html>

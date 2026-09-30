@@ -60,11 +60,6 @@ enum CareFooterResolver {
     }
 }
 
-enum CareDataMode: Equatable {
-    case sample
-    case live
-}
-
 /// Which care control last failed a live send (chip fail chrome).
 enum CareFailedControl: Equatable {
     case timed(TimedChipSide)
@@ -107,8 +102,11 @@ final class BabyHomeStatusModel {
     /// Latest done-flash clear work — cancelled when a newer flash schedules.
     private(set) var clearDoneTask: Task<Void, Never>?
 
-    /// Injected live client (nil in sample / previews).
+    /// Injected live client (nil in sample / offline / previews).
     var graphQLClient: (any BabyGraphQLClienting)?
+
+    /// Offline iCloud / in-memory care store (nil until `useOffline`).
+    var offlineStore: (any OfflineCareStoring)?
 
     /// Last quick-care id for retry tests / unknown failure.
     private(set) var lastClientRequestId: String?
@@ -136,27 +134,44 @@ final class BabyHomeStatusModel {
     func useSample() {
         mode = .sample
         graphQLClient = nil
+        offlineStore = nil
         isConnected = true
         needsReconnect = false
         statusFail = nil
         lastFailedControl = nil
         clearRetryPayload()
+        CareDataModeStore.save(.sample)
     }
 
     func useLive(client: any BabyGraphQLClienting) {
         mode = .live
         graphQLClient = client
+        offlineStore = nil
         isConnected = true
         needsReconnect = false
         statusFail = nil
         lastFailedControl = nil
         clearRetryPayload()
+        CareDataModeStore.save(.live)
+    }
+
+    func useOffline(store: any OfflineCareStoring = CloudKitOfflineCareStore()) {
+        mode = .offline
+        graphQLClient = nil
+        offlineStore = store
+        isConnected = true
+        needsReconnect = false
+        statusFail = nil
+        lastFailedControl = nil
+        clearRetryPayload()
+        CareDataModeStore.save(.offline)
     }
 
     /// Clear Keychain token and leave care until user Connects again.
     func logout(tokenStore: any BabyAPITokenStoring = BabyAPITokenStore()) {
         try? tokenStore.clear()
         graphQLClient = nil
+        offlineStore = nil
         mode = .sample
         isConnected = false
         needsReconnect = false
@@ -164,6 +179,44 @@ final class BabyHomeStatusModel {
         lastFailedControl = nil
         showSettingsSheet = false
         clearRetryPayload()
+        CareDataModeStore.clear()
+    }
+
+    /// Reload snapshot from Offline store (does not wipe CloudKit on failure UI).
+    func refreshOfflineSnapshot(ageDays: Int? = nil) async {
+        guard mode == .offline, let store = offlineStore else { return }
+        do {
+            let events = try await store.fetchRecent(limit: 500)
+            snapshot = OfflineSnapshotProjector.make(
+                events: events,
+                ageDays: ageDays ?? snapshot.ageDays
+            )
+            if let start = snapshot.openNapStartedAt {
+                nap = .running(startedAt: start)
+            } else if case .running = nap {
+                nap = .idle
+            }
+            statusFail = nil
+            persistStatusForWidgets()
+        } catch let err as OfflineCareStoreError {
+            statusFail = CloudKitOfflineCareStore.userMessage(for: err)
+        } catch {
+            statusFail = "Could not load Offline care"
+        }
+    }
+
+    private func appendOffline(_ event: CareEvent) {
+        guard mode == .offline, let store = offlineStore else { return }
+        Task {
+            do {
+                try await store.append(event)
+                await refreshOfflineSnapshot()
+            } catch let err as OfflineCareStoreError {
+                statusFail = CloudKitOfflineCareStore.userMessage(for: err)
+            } catch {
+                statusFail = "Could not save Offline care"
+            }
+        }
     }
 
     func isFailed(_ control: CareFailedControl) -> Bool {
@@ -220,6 +273,8 @@ final class BabyHomeStatusModel {
         scheduleClearDone { self.bottleDoneMl = nil }
         if mode == .live {
             Task { await sendQuickCare(action: ["kind": "FORMULA", "amountMl": ml], control: .bottle(ml: ml)) }
+        } else if mode == .offline {
+            appendOffline(CareEvent(kind: "bottle", ml: ml))
         }
     }
 
@@ -232,6 +287,8 @@ final class BabyHomeStatusModel {
         scheduleClearDone { self.pumpDoneMl = nil }
         if mode == .live {
             Task { await sendQuickCare(action: ["kind": "PUMP_AMOUNT", "amountMl": ml], control: .pump(ml: ml)) }
+        } else if mode == .offline {
+            appendOffline(CareEvent(kind: "pump_amount", ml: ml))
         }
     }
 
@@ -258,6 +315,8 @@ final class BabyHomeStatusModel {
                     control: .diaper(kind)
                 )
             }
+        } else if mode == .offline {
+            appendOffline(CareEvent(kind: "diaper", diaperKind: kind.apiValue))
         }
     }
 
@@ -394,6 +453,9 @@ final class BabyHomeStatusModel {
                         control: .timed(active)
                     )
                 }
+            } else if mode == .offline {
+                let side = active == .breastLeft ? "l" : "r"
+                appendOffline(CareEvent(kind: "breast_stop", side: side, durationSec: duration))
             }
         case .done:
             if active == .breastLeft {
@@ -417,6 +479,8 @@ final class BabyHomeStatusModel {
             persistStatusForWidgets()
             if mode == .live {
                 Task { await sendQuickCare(action: ["kind": "SLEEP"], control: .timed(.nap)) }
+            } else if mode == .offline {
+                appendOffline(CareEvent(kind: "nap_start", at: started))
             }
         case .running:
             applySideEffects(.sleep)
@@ -427,6 +491,8 @@ final class BabyHomeStatusModel {
             persistStatusForWidgets()
             if mode == .live {
                 Task { await sendQuickCare(action: ["kind": "SLEEP"], control: .timed(.nap)) }
+            } else if mode == .offline {
+                appendOffline(CareEvent(kind: "nap_stop"))
             }
         case .done:
             nap = .idle
@@ -493,6 +559,16 @@ final class BabyHomeStatusModel {
                         control: .timed(side)
                     )
                 }
+            } else if mode == .offline {
+                let offlineSide: String = {
+                    switch side {
+                    case .pumpLeft: return "l"
+                    case .pumpRight: return "r"
+                    case .pumpBoth: return "both"
+                    default: return "l"
+                    }
+                }()
+                appendOffline(CareEvent(kind: "pump_stop", side: offlineSide, durationSec: duration))
             }
         case .done:
             switch side {

@@ -3,9 +3,9 @@ import SwiftUI
 enum ConnectGuideCopy {
     static let title = "Quick connect"
     static let steps: [String] = [
-        "On web: Settings → Device pairing → Baby Care → Generate code",
-        "Pick Production (or Local for simulator)",
-        "Enter code → Save & connect",
+        "Offline (default): Start Offline — care stores in iCloud (no pairing)",
+        "Cloud: enter pairing code from web Settings → Device pairing → Baby Care",
+        "Cloud URL defaults to http://127.0.0.1:3000 — change if your server differs",
     ]
 }
 
@@ -14,21 +14,20 @@ struct AuthConnectView: View {
     var onDismiss: (() -> Void)?
     @Environment(\.colorScheme) private var scheme
 
-    /// Default: Local selected, URL field hidden (`localPreset` under the hood).
-    @State private var baseURL: String = BabyAPIConfig.localPreset
-    @State private var selectedPreset: ConnectHostPreset = .local
+    /// Default: Offline selected (HTML Gate A2).
+    @State private var baseURL: String = ConnectHostURLField.cloudDefaultURL
+    @State private var selectedPreset: ConnectHostPreset = ConnectHostURLField.defaultPreset
     @State private var pairingCode: String = ""
     @State private var showHelp = false
     @State private var showAdvanced = false
-    /// Do not preload Keychain into the field — cold start restores via BabySessionRestore.
     @State private var token: String = ""
     @State private var errorText: String?
     @State private var connecting = false
 
     private let tokenStore = BabyAPITokenStore()
 
-    /// URL field only when Production is selected (Local hides it).
     private var showsURLField: Bool { ConnectHostURLField.isVisible(selected: selectedPreset) }
+    private var showsPairing: Bool { ConnectHostURLField.showsPairingFields(selected: selectedPreset) }
 
     var body: some View {
         let p = BabyPalette(scheme: scheme)
@@ -39,16 +38,24 @@ struct AuthConnectView: View {
                     .multilineTextAlignment(.center)
 
                 HStack(spacing: 6) {
-                    presetButton("Local", preset: .local, palette: p) {
-                        baseURL = BabyAPIConfig.localPreset
-                        selectedPreset = .local
+                    presetButton("Offline", preset: .offline, palette: p) {
+                        let next = ConnectPresetSelection.apply(.offline, baseURL: baseURL)
+                        selectedPreset = next.selected
                         errorText = nil
                     }
-                    presetButton("Production", preset: .production, palette: p) {
-                        baseURL = ""
-                        selectedPreset = .production
+                    presetButton("Cloud", preset: .cloud, palette: p) {
+                        let next = ConnectPresetSelection.apply(.cloud, baseURL: baseURL)
+                        baseURL = next.baseURL
+                        selectedPreset = next.selected
                         errorText = nil
                     }
+                }
+
+                if selectedPreset == .offline {
+                    Text("Stores care in iCloud. No pairing code. Companions later.")
+                        .font(BabyTokens.secondaryFont)
+                        .foregroundStyle(p.muted)
+                        .multilineTextAlignment(.center)
                 }
 
                 if showsURLField {
@@ -57,9 +64,11 @@ struct AuthConnectView: View {
                         .autocorrectionDisabled()
                 }
 
-                TextField("Pairing code", text: $pairingCode)
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
+                if showsPairing {
+                    TextField("Pairing code", text: $pairingCode)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                }
 
                 if let errorText {
                     Text(errorText)
@@ -68,11 +77,18 @@ struct AuthConnectView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                Button(connecting ? "Connecting…" : "Save & connect") {
-                    Task { await saveAndConnectLive() }
+                if selectedPreset == .offline {
+                    Button("Start Offline") {
+                        startOffline()
+                    }
+                    .tint(p.accent)
+                } else {
+                    Button(connecting ? "Connecting…" : "Save & connect") {
+                        Task { await saveAndConnectLive() }
+                    }
+                    .tint(p.accent)
+                    .disabled(connecting)
                 }
-                .tint(p.accent)
-                .disabled(connecting)
 
                 Button(showHelp ? "Hide help" : "Need help?") {
                     showHelp.toggle()
@@ -91,19 +107,21 @@ struct AuthConnectView: View {
                                 .foregroundStyle(p.muted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        Button(showAdvanced ? "Hide advanced paste" : "Advanced: paste token") {
-                            showAdvanced.toggle()
-                        }
-                        .font(.caption2)
-                        .padding(.top, 4)
-                        if showAdvanced {
-                            SecureField("mny_… token", text: $token)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                            Button("Save pasted credentials") {
-                                saveAdvancedPaste()
+                        if selectedPreset == .cloud {
+                            Button(showAdvanced ? "Hide advanced paste" : "Advanced: paste token") {
+                                showAdvanced.toggle()
                             }
                             .font(.caption2)
+                            .padding(.top, 4)
+                            if showAdvanced {
+                                SecureField("mny_… token", text: $token)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                Button("Save pasted credentials") {
+                                    saveAdvancedPaste()
+                                }
+                                .font(.caption2)
+                            }
                         }
                     }
                     .padding(8)
@@ -117,13 +135,12 @@ struct AuthConnectView: View {
         .background(p.background)
     }
 
-    /// Edits keep Production selected so the field stays visible (Local tap is the only way to hide it).
     private var urlFieldBinding: Binding<String> {
         Binding(
             get: { baseURL },
             set: { newValue in
                 baseURL = newValue
-                selectedPreset = .production
+                selectedPreset = .cloud
             }
         )
     }
@@ -135,19 +152,44 @@ struct AuthConnectView: View {
         action: @escaping () -> Void
     ) -> some View {
         let on = selectedPreset == preset
-        return Button(action: action) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(on ? palette.accentForeground : palette.foreground)
-                .frame(maxWidth: .infinity)
-                .frame(height: BabyTokens.careChipHeight)
-                .background(on ? palette.accent : Color.clear)
-                .background {
-                    if !on { Rectangle().fill(.ultraThinMaterial) }
+        let shape = RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous)
+        // Prefer tap gesture over `.buttonStyle(.plain)` — plain only hits text glyphs,
+        // and ScrollView often swallows those tiny targets on watchOS.
+        return Text(title)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(on ? palette.accentForeground : palette.foreground)
+            .frame(maxWidth: .infinity)
+            .frame(height: BabyTokens.careChipHeight)
+            .background {
+                switch ConnectPresetChipHit.fill(isSelected: on) {
+                case .accent:
+                    palette.accent
+                case .material:
+                    Rectangle().fill(.ultraThinMaterial)
+                case .clear:
+                    Color.clear
                 }
-                .clipShape(RoundedRectangle(cornerRadius: BabyTokens.nestedRadius, style: .continuous))
+            }
+            .contentShape(shape)
+            .clipShape(shape)
+            .onTapGesture(perform: action)
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+    }
+
+    @MainActor
+    private func startOffline() {
+        errorText = nil
+        model.useOffline()
+        Task {
+            await model.refreshOfflineSnapshot()
+            if model.statusFail != nil {
+                errorText = model.statusFail
+                model.isConnected = false
+                return
+            }
+            onDismiss?()
         }
-        .buttonStyle(.plain)
     }
 
     @MainActor
@@ -158,7 +200,7 @@ struct AuthConnectView: View {
             connecting = true
             defer { connecting = false }
             guard let origin = BabyAPIConfig.normalize(baseURL) ?? BabyAPIConfig.normalize(
-                BabyAPIConfig.productionPairingOrigin
+                BabyAPIConfig.cloudPreset
             ) else {
                 errorText = "Enter a valid http(s) URL"
                 return
@@ -172,7 +214,7 @@ struct AuthConnectView: View {
                 }
                 try tokenStore.save(result.token)
                 baseURL = result.baseURL
-                selectedPreset = .production
+                selectedPreset = .cloud
                 token = result.token
                 pairingCode = ""
                 enterLive(token: result.token)
@@ -211,7 +253,6 @@ struct AuthConnectView: View {
         model.useLive(client: client)
         errorText = nil
         onDismiss?()
-        // Status load is owned by BabyHomeView.task(id: mode) to avoid a double query.
     }
 
     private func watchPairUserMessage(_ err: WatchPairError) -> String {

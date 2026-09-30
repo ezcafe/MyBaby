@@ -1,21 +1,38 @@
 # MyBaby Watch — Baby Care home + companions
 
-WatchOS 10+ companion for one-thumb care logging. Use **sample** mode offline, or connect to your my-apps Baby GraphQL API.
+WatchOS 10+ companion for one-thumb care logging. Use **Offline** (iCloud) by default, or **Cloud** to connect to your my-apps Baby GraphQL API. Previews may still use **sample** data.
 
-## Connect to API (live)
+## Connect — Offline (default)
+
+1. On Watch: open Connect (first launch, or after Log out).
+2. **Offline** is selected by default → **Start Offline**.
+3. Care events store in **iCloud** (CloudKit private DB, container `iCloud.vn.in4.MyBaby`).
+4. Sign in to iCloud on the device; otherwise Start Offline shows an error.
+
+### Companion join contract (future apps)
+
+| Item | Value |
+|------|--------|
+| Container | `iCloud.vn.in4.MyBaby` |
+| Database | Private |
+| Record type | `CareEvent` |
+| Fields | `kind`, `at`, `side?`, `ml?`, `diaperKind?`, `durationSec?`, `schemaVersion` (start at 1) |
+
+No companion iPhone/iPad UI in this pass — join the same container later.
+
+## Connect — Cloud (live API)
 
 1. On the web app (laptop): **Settings → API tokens → Device pairing** → select **Baby Care** → **Generate code**.
-2. On Watch: open the connect screen (first launch, or **Settings** on the Last care page).
-3. Tap **Production** (or **Local** for simulator) so the pairing host is set.
-4. Enter the short pairing code → **Save & connect**.
-5. Or open **Need help?** for steps and **Advanced** paste URL & token if you need a manual `mny_…` (Local simulator).
-6. After **Log out** (Last care → Settings), you must Connect again before care.
+2. On Watch Connect: tap **Cloud** (URL defaults to `http://127.0.0.1:3000`).
+3. Enter the short pairing code → **Save & connect**.
+4. Or open **Need help?** → **Advanced** paste URL & `mny_…` token.
+5. After **Log out**, you must Connect again (Offline or Cloud).
 
 Redeem: `POST {PAIRING_ORIGIN}/api/watch/pair/redeem`. Care calls: `POST {BASE_URL}/api/graphql/baby` (see my-apps `docs/BABY_API.md`).
 
-**Production origin:** default bootstrap is `http://127.0.0.1:3000` for simulator. For a deployed host, set Info.plist `BabyProductionPairingOrigin` to your HTTPS origin (no `/api/graphql/baby` suffix).
+**Cloud URL default:** `http://127.0.0.1:3000`. Override pairing origin via Info.plist `BabyProductionPairingOrigin` for a deployed HTTPS host.
 
-**Device + local HTTP:** Simulator can use `127.0.0.1`. A physical Watch cannot reach your Mac that way — use an HTTPS tunnel or deploy host. Prefer HTTPS for Production.
+**Device + local HTTP:** Simulator can use `127.0.0.1`. A physical Watch cannot reach your Mac that way — use an HTTPS tunnel or deploy host.
 
 ## Web → Watch page map
 
@@ -54,6 +71,8 @@ Companions share one **Baby Care** widget kind. Edit a slot to pick **Care type*
 
 ## Auth
 
-- Production entry: `ContentView(bypassAuth: false)` — connect when not connected.
+- Production entry: `ContentView(bypassAuth: false)` — Connect when not connected (Offline or Cloud).
 - Previews: `bypassAuth: true`.
-- Token in Keychain; base URL in UserDefaults; status DTO in App Group (no token).
+- Cloud: token in Keychain; base URL in UserDefaults.
+- Offline: mode in UserDefaults; care events in CloudKit (never tokens).
+- Status DTO in App Group for widgets (no token).

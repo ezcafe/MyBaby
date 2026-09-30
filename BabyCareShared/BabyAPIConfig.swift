@@ -1,17 +1,18 @@
 import Foundation
 
-/// Which Connect host preset matches the URL field (or none for custom / empty).
+/// Connect mode chips: Offline (iCloud care) or Cloud (live API).
 enum ConnectHostPreset: Equatable {
-    case local
-    case production
+    case offline
+    case cloud
     case none
 }
 
 /// User-editable Baby API origin + GraphQL path builder.
 enum BabyAPIConfig {
     static let baseURLDefaultsKey = "baby.api.baseURL"
+    /// Default Cloud URL (former Local preset).
     static let localPreset = "http://127.0.0.1:3000"
-    /// Bootstrap origin for Production pairing redeem (also saved as base URL after redeem).
+    /// Bootstrap origin for Cloud pairing redeem (also saved as base URL after redeem).
     /// Override via Info.plist `BabyProductionPairingOrigin` when set.
     static var productionPairingOrigin: String {
         if let plist = Bundle.main.object(forInfoDictionaryKey: "BabyProductionPairingOrigin") as? String,
@@ -19,28 +20,32 @@ enum BabyAPIConfig {
         {
             return origin
         }
-        // Default: local Next for simulator; set plist / constant for real deploy.
         return "http://127.0.0.1:3000"
     }
 
-    /// Production preset fills the pairing bootstrap origin (not empty paste field).
-    static var productionPreset: String { productionPairingOrigin }
+    /// Cloud pairing / URL preset (same string as `localPreset` unless plist overrides).
+    static var cloudPreset: String { productionPairingOrigin }
 
-    /// Map a URL field value to Local / Production / none. When both presets normalize equal, prefer `.local` (UI tap still sets `.production` explicitly).
+    /// Alias for older call sites / tests.
+    static var productionPreset: String { cloudPreset }
+
+    /// Map a URL field value to Cloud / none. Offline is never inferred from URL.
     static func resolveHostPreset(
         for raw: String,
-        localPreset: String = localPreset,
-        productionPreset: String = productionPreset
+        cloudPreset: String = cloudPreset,
+        localPreset: String = localPreset
     ) -> ConnectHostPreset {
         guard let origin = normalize(raw) else { return .none }
-        if let local = normalize(localPreset), local == origin {
-            return .local
+        if let cloud = normalize(cloudPreset), cloud == origin {
+            return .cloud
         }
-        if let production = normalize(productionPreset), production == origin {
-            return .production
+        // Former Local URL still counts as Cloud (Cloud chip defaults to this URL).
+        if let local = normalize(localPreset), local == origin {
+            return .cloud
         }
         return .none
     }
+
     /// Strip whitespace and a single trailing `/`. Keep origin only (scheme + host + optional port).
     static func normalize(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -88,10 +93,50 @@ enum BabyAPIConfig {
     }
 }
 
-/// Whether Connect shows the editable API URL field (Production only; Local hides it).
+/// Connect defaults and URL field visibility (Offline | Cloud).
 enum ConnectHostURLField {
+    static var defaultPreset: ConnectHostPreset { .offline }
+
+    /// Cloud URL field defaults to former local preset.
+    static var cloudDefaultURL: String { BabyAPIConfig.localPreset }
+
     static func isVisible(selected: ConnectHostPreset) -> Bool {
-        selected == .production
+        selected == .cloud
+    }
+
+    static func showsPairingFields(selected: ConnectHostPreset) -> Bool {
+        selected == .cloud
+    }
+}
+
+/// Chip tap side effects for Offline | Cloud (keeps URL field defaults in sync).
+enum ConnectPresetSelection {
+    static func apply(
+        _ preset: ConnectHostPreset,
+        baseURL: String
+    ) -> (selected: ConnectHostPreset, baseURL: String) {
+        switch preset {
+        case .offline:
+            return (.offline, baseURL)
+        case .cloud:
+            return (.cloud, ConnectHostURLField.cloudDefaultURL)
+        case .none:
+            return (.none, baseURL)
+        }
+    }
+}
+
+/// watchOS `.buttonStyle(.plain)` only hits opaque label pixels — never use clear fill.
+enum ConnectPresetChipHit {
+    enum Fill: Equatable {
+        case accent
+        case material
+        case clear
+    }
+
+    /// Opaque fill so the full chip frame is tappable with `.buttonStyle(.plain)`.
+    static func fill(isSelected: Bool) -> Fill {
+        isSelected ? .accent : .material
     }
 }
 
@@ -102,10 +147,32 @@ enum AuthGate {
     }
 }
 
+/// Persisted care data mode for cold start.
+enum CareDataModeStore {
+    static let defaultsKey = "baby.care.dataMode"
+
+    static func save(_ mode: CareDataMode, defaults: UserDefaults = .standard) {
+        defaults.set(mode.rawValue, forKey: defaultsKey)
+    }
+
+    static func load(defaults: UserDefaults = .standard) -> CareDataMode? {
+        guard let raw = defaults.string(forKey: defaultsKey) else { return nil }
+        return CareDataMode(rawValue: raw)
+    }
+
+    static func clear(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: defaultsKey)
+    }
+}
+
 /// Cold-start restore from Keychain token + saved base URL (no Connect re-entry).
 enum BabySessionRestore {
     static func shouldRestoreLive(hasToken: Bool, hasBaseURL: Bool, isConnected: Bool) -> Bool {
         !isConnected && hasToken && hasBaseURL
+    }
+
+    static func shouldRestoreOffline(savedMode: CareDataMode?, isConnected: Bool) -> Bool {
+        !isConnected && savedMode == .offline
     }
 
     /// Live client when both credentials exist; otherwise nil (show Connect).
@@ -119,4 +186,3 @@ enum BabySessionRestore {
         return BabyGraphQLClient(baseURLRaw: origin, token: token)
     }
 }
-

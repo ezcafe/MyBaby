@@ -12,7 +12,12 @@ struct ContentView: View {
             _model = State(initialValue: BabyHomeStatusModel(snapshot: .sampleNextFeed()))
         } else {
             let model = BabyHomeStatusModel(snapshot: .sampleNextFeed())
-            if let client = BabySessionRestore.makeLiveClientIfPossible() {
+            if BabySessionRestore.shouldRestoreOffline(
+                savedMode: CareDataModeStore.load(),
+                isConnected: false
+            ) {
+                model.useOffline()
+            } else if let client = BabySessionRestore.makeLiveClientIfPossible() {
                 model.useLive(client: client)
             }
             _model = State(initialValue: model)
@@ -29,6 +34,11 @@ struct ContentView: View {
                 NavigationStack {
                     BabyHomeView(model: model, onOpenConnect: { showConnect = true })
                 }
+            }
+        }
+        .task(id: model.mode) {
+            if model.mode == .offline {
+                await model.refreshOfflineSnapshot()
             }
         }
         .onOpenURL { url in
