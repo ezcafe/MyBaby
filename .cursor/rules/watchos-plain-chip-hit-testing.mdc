@@ -1,0 +1,45 @@
+---
+description: watchOS chip/button hit testing — never use clear fills with plain buttons
+globs: "**/*.{swift}"
+alwaysApply: false
+---
+
+# watchOS chip hit testing
+
+## Problem (learned)
+
+On watchOS, `.buttonStyle(.plain)` only hits **opaque** label pixels. A chip with `Color.clear` (or empty space around caption text) looks tappable but ignores most taps — especially inside `ScrollView`. Offline/Cloud Connect chips failed this way.
+
+## Rules
+
+- **Opaque fill always**: Selected = accent (or solid). Unselected = `.ultraThinMaterial` or another opaque fill. Never `Color.clear` as the chip background for tappable controls.
+- **Full-frame hit target**: Add `.contentShape` matching the chip clip shape after the frame/background.
+- **Prefer proven patterns**: Match `CareControls` / `CareMlAmountGrid` / `DiaperKindGrid` (material fill + frame height `BabyTokens.careChipHeight`).
+- **ScrollView chips**: If plain `Button` still misses taps, use full-frame `.onTapGesture` + `.accessibilityAddTraits(.isButton)` instead of plain Button.
+- **Contract helper**: Use `ConnectPresetChipHit.fill(isSelected:)` — unselected must be `.material`, never `.clear`. Keep `connectPresetChipsUseOpaqueFillForHitTesting` green.
+
+## Bad vs good
+
+```swift
+// BAD — only the text glyphs receive taps
+Button(action: action) {
+    Text(title)
+        .frame(maxWidth: .infinity)
+        .frame(height: BabyTokens.careChipHeight)
+        .background(on ? palette.accent : Color.clear)
+}
+.buttonStyle(.plain)
+
+// GOOD — full chip is tappable
+Text(title)
+    .frame(maxWidth: .infinity)
+    .frame(height: BabyTokens.careChipHeight)
+    .background {
+        if on { palette.accent }
+        else { Rectangle().fill(.ultraThinMaterial) }
+    }
+    .contentShape(shape)
+    .clipShape(shape)
+    .onTapGesture(perform: action)
+    .accessibilityAddTraits(.isButton)
+```
