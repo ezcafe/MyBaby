@@ -1,10 +1,20 @@
 import Foundation
 
 /// Connect mode chips: Offline (iCloud care) or Cloud (live API).
-enum ConnectHostPreset: Equatable {
+enum ConnectHostPreset: Equatable, Hashable {
     case offline
     case cloud
     case none
+}
+
+/// Shared Connect help copy (Watch + Phone).
+enum ConnectGuideCopy {
+    static let title = "Quick connect"
+    static let steps: [String] = [
+        "Offline (default): Start Offline — care stores in iCloud (no pairing)",
+        "Cloud: enter pairing code from web Settings → Device pairing → Baby Care",
+        "Cloud URL defaults to http://127.0.0.1:3000 — change if your server differs",
+    ]
 }
 
 /// User-editable Baby API origin + GraphQL path builder.
@@ -46,20 +56,31 @@ enum BabyAPIConfig {
         return .none
     }
 
+    /// True for localhost / 127.0.0.1 / ::1 (cleartext http allowed only here).
+    static func isLoopbackHost(_ host: String?) -> Bool {
+        guard let host else { return false }
+        let h = host.lowercased()
+        return h == "localhost" || h == "127.0.0.1" || h == "::1"
+    }
+
     /// Strip whitespace and a single trailing `/`. Keep origin only (scheme + host + optional port).
+    /// `http` is allowed only for loopback; all other hosts require `https`.
     static func normalize(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         guard let url = URL(string: trimmed),
               let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https",
-              url.host != nil
+              let host = url.host
         else {
+            return nil
+        }
+        if scheme == "http", !isLoopbackHost(host) {
             return nil
         }
         var comps = URLComponents()
         comps.scheme = scheme
-        comps.host = url.host
+        comps.host = host
         comps.port = url.port
         guard var origin = comps.string else { return nil }
         while origin.hasSuffix("/") {

@@ -1,15 +1,23 @@
-# MyBaby Watch — Baby Care home + companions
+# MyBaby — Watch + Phone companions
 
-WatchOS 10+ companion for one-thumb care logging. Use **Offline** (iCloud) by default, or **Cloud** to connect to your my-apps Baby GraphQL API. Previews may still use **sample** data.
+WatchOS 10+ and **iPhone** companions for Baby Care. Use **Offline** (iCloud) by default, or **Cloud** to connect to your my-apps Baby GraphQL API. Previews may still use **sample** data.
+
+## Phone app (M1–M3)
+
+- Target: **MyBaby Phone App** (iOS application) — Connect Offline | Cloud, Offline iCloud join, Cloud pairing, Settings leave.
+- **M2 care home:** bottom tabs Feed / Sleep / Diaper / Pump / Last care — same quick-care rules as Watch (`babyHomeQuickStatus` / `babyQuickCare` live; CloudKit Offline). Fail shows **Failed** + **Retry**.
+- **M3 Home Screen widgets:** extension **MyBaby Phone WidgetsExtension** — systemSmall + systemMedium **Baby Care** widget. Reads App Group `group.vn.in4.MyBaby` (same mailbox as Watch). Care type Auto | Feed | Sleep | Diaper | Pump. Live timer or last-care teal/red. Tap deep-links into care tabs. No network from the widget.
+- Joins the same CloudKit container as Watch: `iCloud.vn.in4.MyBaby`.
+- Entitlements: `Config/PhoneApp.entitlements` + `Config/Widgets.entitlements` (CloudKit on app; App Group on app + widgets).
 
 ## Connect — Offline (default)
 
-1. On Watch: open Connect (first launch, or after Log out).
+1. On Watch or Phone: open Connect (first launch, or after Leave / Log out).
 2. **Offline** is selected by default → **Start Offline**.
 3. Care events store in **iCloud** (CloudKit private DB, container `iCloud.vn.in4.MyBaby`).
 4. Sign in to iCloud on the device; otherwise Start Offline shows an error.
 
-### Companion join contract (future apps)
+### Companion join contract
 
 | Item | Value |
 |------|--------|
@@ -18,21 +26,21 @@ WatchOS 10+ companion for one-thumb care logging. Use **Offline** (iCloud) by de
 | Record type | `CareEvent` |
 | Fields | `kind`, `at`, `side?`, `ml?`, `diaperKind?`, `durationSec?`, `schemaVersion` (start at 1) |
 
-No companion iPhone/iPad UI in this pass — join the same container later.
+Phone and Watch share this store when signed into the same Apple ID.
 
 ## Connect — Cloud (live API)
 
 1. On the web app (laptop): **Settings → API tokens → Device pairing** → select **Baby Care** → **Generate code**.
-2. On Watch Connect: tap **Cloud** (URL defaults to `http://127.0.0.1:3000`).
+2. On Watch or Phone Connect: tap **Cloud** (URL defaults to `http://127.0.0.1:3000`).
 3. Enter the short pairing code → **Save & connect**.
 4. Or open **Need help?** → **Advanced** paste URL & `mny_…` token.
-5. After **Log out**, you must Connect again (Offline or Cloud).
+5. After **Leave / Log out**, you must Connect again (Offline or Cloud).
 
 Redeem: `POST {PAIRING_ORIGIN}/api/watch/pair/redeem`. Care calls: `POST {BASE_URL}/api/graphql/baby` (see my-apps `docs/BABY_API.md`).
 
 **Cloud URL default:** `http://127.0.0.1:3000`. Override pairing origin via Info.plist `BabyProductionPairingOrigin` for a deployed HTTPS host.
 
-**Device + local HTTP:** Simulator can use `127.0.0.1`. A physical Watch cannot reach your Mac that way — use an HTTPS tunnel or deploy host.
+**Device + local HTTP:** Simulator can use `127.0.0.1`. A physical device cannot reach your Mac that way — use an HTTPS tunnel or deploy host.
 
 ## Web → Watch page map
 
@@ -63,11 +71,22 @@ Aliases (same pages): `breast` / `bottle` → Feed; `nap` → Sleep; `pump-amoun
 
 Companions share one **Baby Care** widget kind. Edit a slot to pick **Care type**: **Auto** (any running timer, else latest care), or **Feed / Sleep / Diaper / Pump**. Tap opens the matching home page. They read the App Group snapshot written by the app. While a care timer runs (for that type, or any type when Auto), the face shows a live timer; when idle, last care time in teal (in range) or red (out of range). Logging stays in the app.
 
+## Add Baby Care to the iPhone Home Screen
+
+1. Build & run **MyBaby Phone App** (embeds **MyBaby Phone WidgetsExtension**).
+2. Long-press Home Screen → **Edit** → **Add Widget** → **Baby Care**.
+3. Choose small or medium; Edit widget → **Care type** (Auto or Feed / Sleep / Diaper / Pump).
+4. Tap opens the matching Phone care tab.
+
+Phone widgets use kind `BabyCarePhoneHome`. The care app reloads both Phone and Watch widget kinds after status writes.
+
 ## Project layout
 
 - `MyBaby Watch App/` — `BabyHomeView`, chips, connect UI
-- `BabyCareShared/` — snapshot, status store, API config/client, mapper, deep link, care side effects, chip mls, timeline helper
+- `MyBaby Phone App/` — Connect, care TabView, Settings
+- `BabyCareShared/` — snapshot, status store, API config/client, mapper, deep link, care side effects, chip mls, timeline helper, widget kinds
 - `MyBaby Watch Widgets/` — complications + Smart Stack widgets
+- `MyBaby Phone Widgets/` — iOS Home Screen widgets
 
 ## Auth
 

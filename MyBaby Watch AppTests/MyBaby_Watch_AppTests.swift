@@ -517,6 +517,13 @@ struct BabyHomeStatusTests {
         #expect(DiaperKindGrid.chipHeight == BabyTokens.careChipHeight)
     }
 
+    @Test func phoneCareMetricsAreRoomierThanWatch() {
+        #expect(BabyTokens.careChipHeight(for: .watch) == BabyTokens.minHit)
+        #expect(BabyTokens.careChipHeight(for: .phone) == 52)
+        #expect(BabyTokens.careChipHeight(for: .phone) > BabyTokens.careChipHeight(for: .watch))
+        #expect(BabyTokens.careChromePlatform == .watch)
+    }
+
     @Test func timedChipPumpBothTitle() {
         #expect(TimedChipSide.pumpBoth.title == "Both")
         #expect(TimedChipSide.pumpBoth.runningTitle == "Both")
@@ -585,6 +592,22 @@ struct BabyAPIConfigTests {
         #expect(!BabyAPIConfig.validate("/relative"))
         #expect(!BabyAPIConfig.validate("ftp://x"))
         #expect(BabyAPIConfig.validate(BabyAPIConfig.localPreset))
+    }
+
+    @Test func httpsExceptLoopbackRejectsCleartextRemote() {
+        #expect(BabyAPIConfig.normalize("http://example.com") == nil)
+        #expect(!BabyAPIConfig.saveBaseURL("http://evil.example", defaults: UserDefaults(suiteName: "http-reject.\(UUID().uuidString)")!))
+        #expect(BabyAPIConfig.normalize("http://127.0.0.1:3000") == "http://127.0.0.1:3000")
+        #expect(BabyAPIConfig.normalize("http://localhost:3000") == "http://localhost:3000")
+        #expect(BabyAPIConfig.normalize("https://app.example.com") == "https://app.example.com")
+    }
+
+    @Test func isLoopbackHostRecognizesLocal() {
+        #expect(BabyAPIConfig.isLoopbackHost("127.0.0.1"))
+        #expect(BabyAPIConfig.isLoopbackHost("localhost"))
+        #expect(BabyAPIConfig.isLoopbackHost("LOCALHOST"))
+        #expect(!BabyAPIConfig.isLoopbackHost("example.com"))
+        #expect(!BabyAPIConfig.isLoopbackHost(nil))
     }
 
     @Test func localPresetIsLoopback() {
@@ -880,6 +903,30 @@ struct BabyLiveModelTests {
         #expect(model.statusFail?.contains("Unauthorized") == true)
     }
 
+    @Test @MainActor func unknownGraphQLErrorHidesRawServerMessage() async {
+        let secret = "secret=mny_leaked_token_xyz"
+        let stub = StubGraphQLClient()
+        stub.error = BabyGraphQLError.graphQL(message: secret, code: "INTERNAL")
+        let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
+        await model.loadLiveStatus()
+        #expect(model.statusFail == BabyLiveStatusFailCopy.genericGraphQL)
+        #expect(model.statusFail?.contains(secret) != true)
+        #expect(!model.needsReconnect)
+    }
+
+    @Test func liveStatusFailCopyMapsKnownCases() {
+        let auth = BabyLiveStatusFailCopy.from(
+            BabyGraphQLError.graphQL(message: "x", code: "FORBIDDEN")
+        )
+        #expect(auth.text == BabyLiveStatusFailCopy.unauthorized)
+        #expect(auth.needsReconnect)
+        let generic = BabyLiveStatusFailCopy.from(
+            BabyGraphQLError.graphQL(message: "db stack trace", code: nil)
+        )
+        #expect(generic.text == BabyLiveStatusFailCopy.genericGraphQL)
+        #expect(!generic.needsReconnect)
+    }
+
     @Test @MainActor func modelSelectDiaperWithDetailsIncludesAmount() async {
         let stub = StubGraphQLClient()
         let model = BabyHomeStatusModel(mode: .live, graphQLClient: stub)
@@ -977,6 +1024,32 @@ struct BabyLiveModelTests {
         #expect(model.graphQLClient == nil)
         #expect(model.lastFailedControl == nil)
         #expect(!model.showSettingsSheet)
+        #expect(AuthGate.showsConnect(bypassAuth: false, isConnected: model.isConnected))
+    }
+
+    /// Leave clears token + disconnect; saved Cloud origin stays for reconnect.
+    @Test @MainActor func logoutKeepsSavedBaseURL() {
+        let previous = BabyAPIConfig.loadBaseURL()
+        defer {
+            if previous.isEmpty {
+                BabyAPIConfig.clearBaseURL()
+            } else {
+                _ = BabyAPIConfig.saveBaseURL(previous)
+            }
+        }
+
+        let saved = "http://127.0.0.1:3000"
+        #expect(BabyAPIConfig.saveBaseURL(saved))
+
+        let store = InMemoryBabyAPITokenStore()
+        try? store.save("mny_test_token")
+        let model = BabyHomeStatusModel(isConnected: true, mode: .live, graphQLClient: StubGraphQLClient())
+        model.logout(tokenStore: store)
+
+        #expect(store.load() == nil)
+        #expect(!model.isConnected)
+        #expect(model.graphQLClient == nil)
+        #expect(BabyAPIConfig.loadBaseURL() == "http://127.0.0.1:3000")
         #expect(AuthGate.showsConnect(bypassAuth: false, isConnected: model.isConnected))
     }
 
@@ -1237,6 +1310,49 @@ struct BabyLiveModelTests {
         #expect(BabyCareComplicationDisplay.formatRelative(90 * 60) == "1h")
     }
 
+    @Test func accessibilitySummaryRunningContainsKindWithoutOverdue() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let display = BabyCareComplicationDisplay.resolve(.sampleOpenNap(now: now), now: now)
+        let summary = display.accessibilitySummary
+        #expect(summary.contains("Nap"))
+        #expect(!summary.localizedCaseInsensitiveContains("overdue"))
+    }
+
+    @Test func accessibilitySummaryIdleOverdueContainsKindAndOverdue() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let display = BabyCareComplicationDisplay.resolve(.sampleOverdueFeed(now: now), now: now)
+        let summary = display.accessibilitySummary
+        #expect(summary.localizedCaseInsensitiveContains("feed"))
+        #expect(summary.localizedCaseInsensitiveContains("overdue"))
+        #expect(display.showsOverdueCue)
+    }
+
+    @Test func accessibilitySummaryEmptyUsesClearCopy() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        var snap = BabyHomeStatusSnapshot.sampleNextFeed(now: now)
+        snap.lastDiaperAt = nil
+        snap.lastDiaper = .init(
+            iconSystemName: "leaf.fill",
+            sentence: "No diaper yet",
+            isEmpty: true
+        )
+        let display = BabyCareComplicationDisplay.resolve(snap, careType: .diaper, now: now)
+        #expect(display.mode == .empty)
+        #expect(display.accessibilitySummary == BabyCareComplicationDisplay.emptyPrimaryText)
+        #expect(BabyCareComplicationDisplay.emptyPrimaryText == "No care yet")
+        #expect(!display.showsOverdueCue)
+    }
+
+    @Test func showsOverdueCueOnlyWhenIdleRed() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let overdue = BabyCareComplicationDisplay.resolve(.sampleOverdueFeed(now: now), now: now)
+        #expect(overdue.showsOverdueCue)
+        let inRange = BabyCareComplicationDisplay.resolve(.sampleNextFeed(now: now), now: now)
+        #expect(!inRange.showsOverdueCue)
+        let running = BabyCareComplicationDisplay.resolve(.sampleOpenNap(now: now), now: now)
+        #expect(!running.showsOverdueCue)
+    }
+
     @Test func careGuideFeedIntervalPositive() {
         #expect(CareGuideIntervals.feedMaxGapSeconds(ageDays: 10) > 0)
         #expect(CareGuideIntervals.diaperMaxGapSeconds(ageDays: 10) == 3 * 3600)
@@ -1383,5 +1499,256 @@ struct OfflineCareStoreTests {
         try await Task.sleep(nanoseconds: 50_000_000)
         let events = try await store.fetchRecent(limit: 5)
         #expect(events.contains { $0.kind == "bottle" && $0.ml == 150 })
+    }
+}
+
+struct PhoneSessionModelTests {
+    @Test @MainActor func useOfflineConnectsWithHealthyStore() async {
+        let store = InMemoryOfflineCareStore()
+        let session = PhoneSessionModel()
+        await session.useOffline(store: store)
+        #expect(session.isConnected)
+        #expect(session.mode == .offline)
+        #expect(session.graphQLClient == nil)
+        #expect(session.statusFail == nil)
+        #expect(CloudKitOfflineCareStore.containerIdentifier == "iCloud.vn.in4.MyBaby")
+    }
+
+    @Test @MainActor func useOfflineFailsWhenStoreUnavailable() async {
+        let store = FailingOfflineCareStore()
+        let session = PhoneSessionModel()
+        await session.useOffline(store: store)
+        #expect(!session.isConnected)
+        #expect(session.offlineStore == nil)
+        #expect(session.statusFail != nil)
+    }
+
+    @Test @MainActor func leaveOfflineKeepsStoreEvents() async throws {
+        let store = InMemoryOfflineCareStore()
+        try await store.append(CareEvent(kind: "bottle", ml: 90))
+        let session = PhoneSessionModel()
+        await session.useOffline(store: store)
+        let tokenStore = InMemoryBabyAPITokenStore()
+        session.leave(tokenStore: tokenStore)
+        #expect(!session.isConnected)
+        #expect(session.offlineStore == nil)
+        let remaining = try await store.fetchRecent(limit: 10)
+        #expect(remaining.count == 1)
+    }
+
+    @Test @MainActor func pairSuccessEntersLive() async throws {
+        let session = PhoneSessionModel()
+        let tokenStore = InMemoryBabyAPITokenStore()
+        let pair = FakeWatchPairClient(
+            result: .success(WatchPairRedeemResult(baseURL: "http://127.0.0.1:3000", token: "mny_test"))
+        )
+        let ok = await session.connectWithPairingCode(
+            code: "ABCD",
+            pairClient: pair,
+            tokenStore: tokenStore
+        )
+        #expect(ok)
+        #expect(session.isConnected)
+        #expect(session.mode == .live)
+        #expect(tokenStore.load() == "mny_test")
+    }
+
+    @Test @MainActor func pairFailureShowsError() async {
+        let session = PhoneSessionModel()
+        let pair = FakeWatchPairClient(result: .failure(.pairCode("INVALID_CODE")))
+        let ok = await session.connectWithPairingCode(
+            code: "BAD",
+            pairClient: pair,
+            tokenStore: InMemoryBabyAPITokenStore()
+        )
+        #expect(!ok)
+        #expect(!session.isConnected)
+        #expect(session.statusFail != nil)
+    }
+
+    @Test @MainActor func leaveLiveClearsToken() async throws {
+        let session = PhoneSessionModel()
+        let tokenStore = InMemoryBabyAPITokenStore()
+        try tokenStore.save("mny_live")
+        #expect(
+            session.connectWithPastedCredentials(
+                baseURLRaw: "http://127.0.0.1:3000",
+                token: "mny_live",
+                tokenStore: tokenStore
+            )
+        )
+        session.leave(tokenStore: tokenStore)
+        #expect(!session.isConnected)
+        #expect(tokenStore.load() == nil)
+    }
+
+    @Test @MainActor func coldStartRestoresOffline() async {
+        let suite = "PhoneSessionRestore.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        CareDataModeStore.save(.offline, defaults: defaults)
+        let session = PhoneSessionModel()
+        let store = InMemoryOfflineCareStore()
+        await session.restoreColdStart(
+            tokenStore: InMemoryBabyAPITokenStore(),
+            defaults: defaults,
+            makeOfflineStore: { store }
+        )
+        #expect(session.isConnected)
+        #expect(session.mode == .offline)
+    }
+}
+
+struct PhoneCareWiringTests {
+    @Test @MainActor func applyOfflineUsesSessionStoreWithoutGraphQL() async {
+        let store = InMemoryOfflineCareStore()
+        let session = PhoneSessionModel()
+        await session.useOffline(store: store)
+        let model = PhoneCareWiring.makeModel(from: session)
+        #expect(model.mode == .offline)
+        #expect(model.offlineStore != nil)
+        #expect(model.graphQLClient == nil)
+        #expect(model.isConnected)
+    }
+
+    @Test @MainActor func applyLiveUsesSessionClient() {
+        let session = PhoneSessionModel()
+        let stub = StubGraphQLClient()
+        session.useLive(client: stub)
+        let model = PhoneCareWiring.makeModel(from: session)
+        #expect(model.mode == .live)
+        #expect(model.graphQLClient != nil)
+        #expect(model.offlineStore == nil)
+        #expect(model.isConnected)
+    }
+
+    @Test @MainActor func refreshLiveCallsStatusDocument() async {
+        let status = """
+        {"babyHomeQuickStatus":{"lastFeed":{"summary":"Phone live"},"birthDate":"2026-01-01"}}
+        """.data(using: .utf8)!
+        let stub = StubGraphQLClient(statusData: status)
+        let session = PhoneSessionModel()
+        session.useLive(client: stub)
+        let model = PhoneCareWiring.makeModel(from: session)
+        await PhoneCareWiring.refreshStatus(model)
+        #expect(stub.calls.contains { $0.document.contains("babyHomeQuickStatus") })
+        #expect(model.snapshot.lastFeed.sentence == "Phone live")
+        #expect(model.statusFail == nil)
+    }
+
+    @Test @MainActor func refreshOfflineDoesNotCallGraphQL() async {
+        let store = InMemoryOfflineCareStore()
+        let session = PhoneSessionModel()
+        await session.useOffline(store: store)
+        let stub = StubGraphQLClient()
+        let model = PhoneCareWiring.makeModel(from: session)
+        // Ensure offline path even if stub somehow attached
+        model.graphQLClient = stub
+        await PhoneCareWiring.refreshStatus(model)
+        #expect(stub.calls.isEmpty)
+    }
+}
+
+struct BabyCareWidgetKindsTests {
+    @Test func reloadKindNamesIncludesWatchAndPhone() {
+        #expect(BabyCareWidgetKinds.watchComplication == "BabyCareComplication")
+        #expect(BabyCareWidgetKinds.phoneHome == "BabyCarePhoneHome")
+        #expect(BabyCareWidgetKinds.reloadKindNames == [
+            "BabyCareComplication",
+            "BabyCarePhoneHome",
+        ])
+    }
+
+    @Test func phoneHomeKindDistinctFromWatch() {
+        #expect(BabyCareWidgetKinds.phoneHome != BabyCareWidgetKinds.watchComplication)
+    }
+}
+
+// MARK: - phone-security-perf
+
+final class RecordingOfflineCareStore: OfflineCareStoring, @unchecked Sendable {
+    private let inner = InMemoryOfflineCareStore()
+    private(set) var lastFetchLimit: Int?
+
+    func append(_ event: CareEvent) async throws {
+        try await inner.append(event)
+    }
+
+    func fetchRecent(limit: Int) async throws -> [CareEvent] {
+        lastFetchLimit = limit
+        return try await inner.fetchRecent(limit: limit)
+    }
+}
+
+final class RecordingWidgetTimelineReloader: WidgetTimelineReloading, @unchecked Sendable {
+    private(set) var reloadCount = 0
+
+    func reloadCareWidgetKinds() {
+        reloadCount += 1
+    }
+}
+
+struct PhoneSecurityPerfTests {
+    @Test func offlineFetchLimitIsEighty() {
+        #expect(OfflineCareFetchLimits.recentForStatus == 80)
+    }
+
+    @Test func cloudKitDesiredKeysListCareEventFields() {
+        let keys = Set(CloudKitOfflineCareStore.careEventDesiredKeys.map { String(describing: $0) })
+        #expect(keys.isSuperset(of: [
+            "kind", "at", "schemaVersion", "side", "ml", "diaperKind", "durationSec",
+        ]))
+    }
+
+    @Test func careEventCloudKitRoundTrip() {
+        let event = CareEvent(
+            id: "e1",
+            kind: "bottle",
+            at: Date(timeIntervalSince1970: 1_700_000_000),
+            ml: 90
+        )
+        let record = CloudKitOfflineCareStore.makeRecord(from: event)
+        let back = CloudKitOfflineCareStore.event(from: record)
+        #expect(back?.id == "e1")
+        #expect(back?.kind == "bottle")
+        #expect(back?.ml == 90)
+    }
+
+    @Test @MainActor func offlineRefreshRequestsStatusLimit() async {
+        let store = RecordingOfflineCareStore()
+        try? await store.append(CareEvent(kind: "bottle", ml: 60))
+        let model = BabyHomeStatusModel()
+        model.useOffline(store: store)
+        await model.refreshOfflineSnapshot()
+        #expect(store.lastFetchLimit == OfflineCareFetchLimits.recentForStatus)
+    }
+
+    @Test @MainActor func widgetReloadCoalescerFiresOnceAfterBurst() async {
+        let reloader = RecordingWidgetTimelineReloader()
+        let coalescer = WidgetTimelineReloadCoalescer(
+            delay: .milliseconds(30),
+            reloader: reloader
+        )
+        coalescer.schedule()
+        coalescer.schedule()
+        coalescer.schedule()
+        #expect(coalescer.scheduleCount == 3)
+        try? await Task.sleep(for: .milliseconds(80))
+        #expect(coalescer.fireCount == 1)
+        #expect(reloader.reloadCount == 1)
+    }
+
+    @Test @MainActor func persistStatusUsesCoalescerNotImmediateReload() async {
+        let reloader = RecordingWidgetTimelineReloader()
+        let model = BabyHomeStatusModel()
+        model.widgetReloadCoalescer = WidgetTimelineReloadCoalescer(
+            delay: .milliseconds(40),
+            reloader: reloader
+        )
+        model.persistStatusForWidgets()
+        model.persistStatusForWidgets()
+        #expect(reloader.reloadCount == 0)
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(reloader.reloadCount == 1)
     }
 }

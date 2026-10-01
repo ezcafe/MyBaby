@@ -5,6 +5,10 @@ import Foundation
 final class CloudKitOfflineCareStore: OfflineCareStoring, @unchecked Sendable {
     static let containerIdentifier = "iCloud.vn.in4.MyBaby"
     static let recordType = "CareEvent"
+    /// Field keys for status projection fetches (avoid pulling unused record data).
+    static let careEventDesiredKeys: [CKRecord.FieldKey] = [
+        "kind", "at", "schemaVersion", "side", "ml", "diaperKind", "durationSec",
+    ]
 
     private let database: CKDatabase
 
@@ -33,7 +37,7 @@ final class CloudKitOfflineCareStore: OfflineCareStoring, @unchecked Sendable {
             let (results, _) = try await database.records(
                 matching: query,
                 inZoneWith: nil,
-                desiredKeys: nil,
+                desiredKeys: Self.careEventDesiredKeys,
                 resultsLimit: limit
             )
             var events: [CareEvent] = []

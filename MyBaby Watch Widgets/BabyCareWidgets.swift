@@ -109,6 +109,7 @@ struct BabyCareEntry: TimelineEntry {
 }
 
 struct BabyCareWidgetEntryView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.widgetFamily) var family
     var entry: BabyCareEntry
 
@@ -121,7 +122,9 @@ struct BabyCareWidgetEntryView: View {
     }
 
     private var accent: Color {
-        display.color == .red ? Color(hex: 0xF87171) : Color(hex: 0x2DD4BF)
+        display.color == .red
+            ? BabyTokens.danger(colorScheme)
+            : BabyTokens.accent(colorScheme)
     }
 
     var body: some View {
@@ -132,22 +135,18 @@ struct BabyCareWidgetEntryView: View {
             case .accessoryCorner:
                 corner
             case .accessoryInline:
-                HStack(spacing: 2) {
-                    Image(systemName: display.iconSystemName)
-                    inlineText
-                }
-                .font(.caption)
-                .foregroundStyle(accent)
-                .monospacedDigit()
+                inline
             case .accessoryRectangular:
                 rectangular
             default:
                 circular
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(display.accessibilitySummary)
     }
 
-    /// Circular: icon + age (two lines when `12h` + `38m`).
+    /// Circular: kind icon + age/timer; overdue cue when needed (not color alone).
     private var circular: some View {
         ZStack {
             AccessoryWidgetBackground()
@@ -159,13 +158,18 @@ struct BabyCareWidgetEntryView: View {
                     .monospacedDigit()
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.7)
+                if display.showsOverdueCue {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 8, weight: .semibold))
+                        .accessibilityHidden(true)
+                }
             }
             .foregroundStyle(accent)
             .padding(.horizontal, 2)
         }
     }
 
-    /// Corner: age in the corner (two lines when needed); kind on the curved label.
+    /// Corner: age in the corner; kind (or kind + overdue) on the curved label.
     private var corner: some View {
         smallPrimaryValue
             .font(.caption2.weight(.bold))
@@ -173,16 +177,20 @@ struct BabyCareWidgetEntryView: View {
             .minimumScaleFactor(0.7)
             .foregroundStyle(accent)
             .widgetLabel {
-                Text(display.kindLabel)
+                Text(cornerLabel)
                     .foregroundStyle(accent)
             }
     }
 
+    private var cornerLabel: String {
+        if display.showsOverdueCue {
+            return "\(display.kindLabel) overdue"
+        }
+        return display.kindLabel
+    }
+
     private var rectangular: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Baby Care")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(accent)
             HStack(spacing: 4) {
                 Text(display.kindLabel)
                     .font(.caption.weight(.bold))
@@ -195,11 +203,25 @@ struct BabyCareWidgetEntryView: View {
             .minimumScaleFactor(0.7)
             Text(secondaryLine)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(BabyTokens.muted(colorScheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private var inline: some View {
+        HStack(spacing: 2) {
+            Image(systemName: display.iconSystemName)
+            inlineText
+            if display.showsOverdueCue {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .accessibilityHidden(true)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(accent)
+        .monospacedDigit()
     }
 
     /// Circular / corner — idle age may stack on two lines.
@@ -210,6 +232,7 @@ struct BabyCareWidgetEntryView: View {
             Text(startedAt, style: .timer)
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
+                .privacySensitive()
         case .idle(_, let at, _):
             let lines = BabyCareComplicationDisplay.formatRelativeLines(
                 entry.date.timeIntervalSince(at)
@@ -221,21 +244,26 @@ struct BabyCareWidgetEntryView: View {
                 }
             }
             .lineLimit(2)
+            .privacySensitive()
         case .empty:
-            Text("·")
+            Text(BabyCareComplicationDisplay.emptyPrimaryText)
+                .lineLimit(2)
+                .minimumScaleFactor(0.55)
         }
     }
 
-    /// Rectangular / inline — keep single-line relative (`12h 38m`).
+    /// Rectangular — keep single-line relative (`12h`).
     @ViewBuilder
     private var widePrimaryValue: some View {
         switch display.mode {
         case .running(_, let startedAt):
             Text(startedAt, style: .timer)
+                .privacySensitive()
         case .idle(_, _, _):
-            Text(display.idleRelative ?? "·")
+            Text(display.idleRelative ?? BabyCareComplicationDisplay.emptyPrimaryText)
+                .privacySensitive()
         case .empty:
-            Text("·")
+            Text(BabyCareComplicationDisplay.emptyPrimaryText)
         }
     }
 
@@ -243,11 +271,13 @@ struct BabyCareWidgetEntryView: View {
     private var inlineText: some View {
         switch display.mode {
         case .running(let kind, let startedAt):
-            Text("\(kind.kindLabel) · ") + Text(startedAt, style: .timer)
+            (Text("\(kind.kindLabel) · ") + Text(startedAt, style: .timer))
+                .privacySensitive()
         case .idle(let kind, _, _):
             Text("Last \(kind.kindLabel.lowercased()) · \(display.idleRelative ?? "")")
+                .privacySensitive()
         case .empty:
-            Text("Baby Care")
+            Text(BabyCareComplicationDisplay.emptyPrimaryText)
         }
     }
 
@@ -259,12 +289,12 @@ struct BabyCareWidgetEntryView: View {
             }
             return entry.snapshot.lastFeed.isEmpty ? "No feed yet" : entry.snapshot.lastFeed.sentence
         case .idle(_, _, let sentence):
-            if display.color == .red {
+            if display.showsOverdueCue {
                 return "\(display.kindLabel) overdue"
             }
             return sentence
         case .empty:
-            return "No care yet"
+            return BabyCareComplicationDisplay.emptyPrimaryText
         }
     }
 
@@ -285,7 +315,7 @@ struct BabyCareWidgets: WidgetBundle {
 struct BabyCareComplication: Widget {
     var body: some WidgetConfiguration {
         AppIntentConfiguration(
-            kind: "BabyCareComplication",
+            kind: BabyCareWidgetKinds.watchComplication,
             intent: BabyCareComplicationIntent.self,
             provider: BabyCareProvider()
         ) { entry in

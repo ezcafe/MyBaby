@@ -1,14 +1,5 @@
 import SwiftUI
 
-enum ConnectGuideCopy {
-    static let title = "Quick connect"
-    static let steps: [String] = [
-        "Offline (default): Start Offline — care stores in iCloud (no pairing)",
-        "Cloud: enter pairing code from web Settings → Device pairing → Baby Care",
-        "Cloud URL defaults to http://127.0.0.1:3000 — change if your server differs",
-    ]
-}
-
 struct AuthConnectView: View {
     @Bindable var model: BabyHomeStatusModel
     var onDismiss: (() -> Void)?

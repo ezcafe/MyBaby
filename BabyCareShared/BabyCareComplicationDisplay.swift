@@ -129,6 +129,37 @@ struct BabyCareComplicationDisplay: Equatable, Sendable {
     /// Relative age for idle (e.g. "25m"); unused when running (use Text.timer).
     var idleRelative: String?
 
+    /// Primary face copy when `mode == .empty` (not a lone middle-dot).
+    static let emptyPrimaryText = "No care yet"
+
+    /// True when idle and out of range — UI should not rely on color alone.
+    var showsOverdueCue: Bool {
+        if case .idle = mode, color == .red { return true }
+        return false
+    }
+
+    /// Combined VoiceOver summary for Home Screen / Lock Screen widgets.
+    var accessibilitySummary: String {
+        switch mode {
+        case .running(let kind, _):
+            return "\(kind.kindLabel) running"
+        case .idle(let kind, _, _):
+            let age = idleRelative ?? ""
+            if color == .red {
+                if age.isEmpty {
+                    return "\(kind.kindLabel) overdue"
+                }
+                return "\(kind.kindLabel) overdue, \(age) ago"
+            }
+            if age.isEmpty {
+                return "Last \(kind.kindLabel.lowercased())"
+            }
+            return "Last \(kind.kindLabel.lowercased()), \(age) ago"
+        case .empty:
+            return Self.emptyPrimaryText
+        }
+    }
+
     static func resolve(
         _ snapshot: BabyHomeStatusSnapshot,
         careType: BabyCareComplicationCareType = .auto,

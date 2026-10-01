@@ -52,6 +52,12 @@ protocol OfflineCareStoring: AnyObject {
     func fetchRecent(limit: Int) async throws -> [CareEvent]
 }
 
+/// Caps for Offline status refresh (home snapshot / widgets).
+enum OfflineCareFetchLimits {
+    /// Newest events pulled for last-care / open timer projection.
+    static let recentForStatus = 80
+}
+
 /// In-memory store for unit tests.
 final class InMemoryOfflineCareStore: OfflineCareStoring, @unchecked Sendable {
     private var events: [CareEvent] = []
