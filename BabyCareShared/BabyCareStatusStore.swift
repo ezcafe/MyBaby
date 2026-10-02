@@ -82,15 +82,15 @@ enum BabyCareStatusStore {
         return try? JSONDecoder().decode(BabyCareStatusDTO.self, from: data)
     }
 
-    /// Build a snapshot for signal/widget UI; falls back to sample when store empty.
+    /// Build a snapshot for widgets; empty mailbox → honest empty (samples only for preview/placeholder).
     static func snapshotForWidgets(
         suiteName: String = appGroupId,
         now: Date = .now
     ) -> BabyHomeStatusSnapshot {
         guard let dto = load(suiteName: suiteName) else {
-            return .sampleNextFeed(now: now)
+            return .emptyForWidgets(now: now)
         }
-        return apply(dto: dto, onto: .sampleNextFeed(now: now))
+        return apply(dto: dto, onto: .emptyForWidgets(now: now))
     }
 
     static func apply(dto: BabyCareStatusDTO, onto base: BabyHomeStatusSnapshot) -> BabyHomeStatusSnapshot {

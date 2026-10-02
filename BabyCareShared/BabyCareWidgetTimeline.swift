@@ -1,7 +1,8 @@
 import Foundation
 
 enum BabyCareWidgetTimeline {
-    /// Next rebuild: while a timer runs keep a long horizon (digits use Text.timer);
+    /// Next rebuild policy (verify-only; do not thrash WidgetKit):
+    /// while a timer runs keep a long horizon (digits use Text.timer);
     /// else at next-feed due / overdue boundary, else 15 min.
     static func nextUpdate(for snapshot: BabyHomeStatusSnapshot, now: Date = .now) -> Date {
         if snapshot.openNapStartedAt != nil || snapshot.runningTimerStartedAt != nil {

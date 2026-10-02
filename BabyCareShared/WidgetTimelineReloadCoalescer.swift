@@ -14,7 +14,8 @@ struct SystemWidgetTimelineReloader: WidgetTimelineReloading {
     }
 }
 
-/// Merges rapid reload requests into one wave after `delay`.
+/// Merges rapid reload requests into one wave after `delay` (default 750ms).
+/// Saves stay immediate; only WidgetKit notify is debounced — do not tune without evidence.
 @MainActor
 final class WidgetTimelineReloadCoalescer {
     private let delay: Duration

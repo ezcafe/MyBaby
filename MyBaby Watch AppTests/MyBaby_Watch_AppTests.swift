@@ -1112,14 +1112,30 @@ struct BabyLiveModelTests {
                 .removePersistentDomain(forName: suite)
         }
         let snap = BabyCareStatusStore.snapshotForWidgets(suiteName: suite)
-        #expect(snap.nextFeedInSeconds != nil || snap.openNapStartedAt == nil)
-        let kind = BabyCarePrimarySignal.resolve(snap)
-        guard case .nextFeed = kind else {
-            // sampleNextFeed default
-            if case .openNap = kind { return }
-            Issue.record("Expected nextFeed from empty-store sample, got \(kind)")
+        #expect(snap.nextFeedInSeconds == nil)
+        #expect(snap.openNapStartedAt == nil)
+        #expect(snap.runningTimerStartedAt == nil)
+        #expect(snap.lastFeedAt == nil)
+        #expect(snap.lastNapAt == nil)
+        #expect(snap.lastDiaperAt == nil)
+        #expect(snap.lastPumpAt == nil)
+        let display = BabyCareComplicationDisplay.resolve(snap)
+        guard case .empty = display.mode else {
+            Issue.record("Expected empty display from empty mailbox, got \(display.mode)")
             return
         }
+        #expect(display.accessibilitySummary == BabyCareComplicationDisplay.emptyPrimaryText)
+        #expect(BabyCareComplicationDisplay.emptyPrimaryText == "No care yet")
+    }
+
+    @Test func emptyForWidgetsResolvesToEmptyDisplay() {
+        let snap = BabyHomeStatusSnapshot.emptyForWidgets()
+        let display = BabyCareComplicationDisplay.resolve(snap)
+        guard case .empty = display.mode else {
+            Issue.record("Expected .empty, got \(display.mode)")
+            return
+        }
+        #expect(display.accessibilitySummary == "No care yet")
     }
 
     @Test func statusStoreDTOExcludesTokenKeys() throws {

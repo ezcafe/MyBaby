@@ -206,6 +206,7 @@ struct BabyCareWidgetEntryView: View {
                 .foregroundStyle(BabyTokens.muted(colorScheme))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+                .privacySensitive()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }

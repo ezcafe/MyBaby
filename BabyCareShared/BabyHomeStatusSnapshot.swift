@@ -126,6 +126,42 @@ struct BabyHomeStatusSnapshot: Equatable, Sendable {
         return s
     }
 
+    /// Honest empty face when App Group mailbox has no DTO (not sample-as-live).
+    static func emptyForWidgets(now: Date = .now) -> BabyHomeStatusSnapshot {
+        _ = now
+        let emptyLine = BabyCareStatusLine(
+            iconSystemName: "heart.fill",
+            sentence: "",
+            isEmpty: true
+        )
+        return BabyHomeStatusSnapshot(
+            title: ageTitle(ageDays: 0),
+            ageDays: 0,
+            feedHeaderDetail: nil,
+            feedTip: "",
+            bottleTip: "",
+            bottleChipMls: [],
+            sleepTip: "",
+            diaperTip: "",
+            pumpTip: "",
+            openNapStartedAt: nil,
+            runningTimerKind: nil,
+            runningTimerStartedAt: nil,
+            nextFeedInSeconds: nil,
+            feedOverdueSeconds: nil,
+            diaperOverdueSeconds: nil,
+            lastFeed: emptyLine,
+            lastNap: emptyLine,
+            lastDiaper: emptyLine,
+            lastPump: emptyLine,
+            lastFeedAt: nil,
+            lastNapAt: nil,
+            lastDiaperAt: nil,
+            lastPumpAt: nil,
+            recentBottleMl: []
+        )
+    }
+
     /// Idle overdue feed for complication previews (Gate A2 red state).
     static func sampleOverdueFeed(now: Date = .now) -> BabyHomeStatusSnapshot {
         var s = sampleNextFeed(now: now)

@@ -146,6 +146,7 @@ struct BabyCarePhoneHomeEntryView: View {
                 .foregroundStyle(BabyTokens.muted(colorScheme))
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 120, alignment: .trailing)
+                .privacySensitive()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
@@ -167,6 +168,7 @@ struct BabyCarePhoneHomeEntryView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+                .privacySensitive()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
